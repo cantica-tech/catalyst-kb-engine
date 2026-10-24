@@ -98,6 +98,43 @@ def _build_folders(args: argparse.Namespace) -> int:
     return 0
 
 
+def _build_vectors(args: argparse.Namespace) -> int:
+    from catalyst_kb_engine.build.vectors import EmbeddingModel, EmbeddingPolicy, build_vectors
+
+    info = BuildInfo(
+        knowledge_base=args.kb,
+        build=args.build,
+        version=args.version,
+        floor=Classification(args.floor),
+        ceiling=Classification(args.ceiling or args.floor),
+        content_commit=args.content_commit,
+    )
+    up_to = args.hosted_up_to if args.hosted_up_to == "Local only" else Classification(args.hosted_up_to)
+    hosted = args.hosted_model and EmbeddingModel(args.hosted_model, args.hosted_model, args.hosted_model.split(":")[0])
+    local = args.local_model and EmbeddingModel(args.local_model, args.local_model, "local")
+    policy = EmbeddingPolicy(hosted_up_to=up_to, hosted=hosted or None, local=local or None)
+    result = asyncio.run(
+        build_vectors(Path(args.repository), Path(args.out), info, policy, max_tokens=args.max_tokens,
+                      overlap=args.overlap)
+    )  # fmt: skip
+    summary = {
+        "out": str(result.out),
+        "classification": result.classification.value,
+        "documents": result.documents,
+        "pointers": result.pointers,
+        "chunks": result.chunks,
+        "left_out": result.left_out,
+        "embedding": result.embedding,
+    }
+    if args.record:
+        location = args.location or str(Path(args.out).resolve())
+        summary["build"] = record_build(
+            CatalystCLI(Path(args.project_root)), info, result, location, f"{args.kb} {args.version}"
+        )
+    print(json.dumps(summary, indent=2))
+    return 0
+
+
 def _parser() -> argparse.ArgumentParser:
     levels = [c.value for c in Classification]
     parser = argparse.ArgumentParser(prog="catalyst-kb-engine", description=__doc__)
@@ -127,9 +164,30 @@ def _parser() -> argparse.ArgumentParser:
     b.add_argument("--content-commit", help="the repository's commit it is built from")
     b.add_argument("--record", action="store_true", help="record it as a KBUILD- in the criterion, Built")
     b.add_argument("--location", help="with --record: where the build is kept (default: the output directory)")
+    v = sub.add_parser("build-vectors", help="write a vector database build of a knowledge base repository")
+    v.add_argument("repository", help="the knowledge base repository (docs/, pointers/)")
+    v.add_argument("out", help="the build's directory, new or empty")
+    v.add_argument("--kb", required=True, help="the KB- ID")
+    v.add_argument("--version", required=True)
+    v.add_argument("--floor", required=True, choices=levels, help="the knowledge base's Classification")
+    v.add_argument("--ceiling", choices=levels, help="the highest classification it may contain (default: --floor)")
+    v.add_argument("--hosted-up-to", choices=["Local only", *levels], default="Local only",
+                   help="the knowledge base's Hosted embedding up to")  # fmt: skip
+    v.add_argument(
+        "--local-model", help="a local Pydantic AI embedding model, e.g. sentence-transformers:all-MiniLM-L6-v2"
+    )
+    v.add_argument(
+        "--hosted-model", help="a hosted one, used only within --hosted-up-to, e.g. openai:text-embedding-3-small"
+    )
+    v.add_argument("--max-tokens", type=int, default=512)
+    v.add_argument("--overlap", type=int, default=64)
+    v.add_argument("--build", help="the KBUILD- ID, once recorded")
+    v.add_argument("--content-commit", help="the repository's commit it is built from")
+    v.add_argument("--record", action="store_true", help="record it as a KBUILD- in the criterion, Built")
+    v.add_argument("--location", help="with --record: where the build is kept (default: the output directory)")
     pl = sub.add_parser("plan", help="read a recorded knowledge base back into its onboarding plan")
     pl.add_argument("kb", help="the KB- ID")
-    for p in (o, b, pl):
+    for p in (o, b, v, pl):
         p.add_argument("--project-root", default=".", help="the catalyst project (default: here)")
     return parser
 
@@ -141,7 +199,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     except SystemExit as exit_:
         return int(exit_.code or 0)
     try:
-        return {"onboard": _onboard, "build-folders": _build_folders, "plan": _plan}[args.command](args)
+        return {"onboard": _onboard, "build-folders": _build_folders, "build-vectors": _build_vectors, "plan": _plan}[
+            args.command
+        ](args)
     except (BuildError, CatalystError, ValidationError, ValueError) as err:
         print(f"catalyst-kb-engine: {err}", file=sys.stderr)
         return 1

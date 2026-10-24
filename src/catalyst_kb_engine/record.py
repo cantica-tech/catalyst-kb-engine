@@ -124,22 +124,29 @@ def read_plan(cli: CatalystCLI, kb: str) -> OnboardingPlan:
 
 
 def record_build(cli: CatalystCLI, info: BuildInfo, result: FoldersBuild, location: str, title: str) -> str:
-    """`catalyst new KBUILD` for a folders build, its Contents written, set `Built` (publishing is a person's)."""
+    """`catalyst new KBUILD` for a build, its Contents written, set `Built` (publishing is a person's)."""
+    from catalyst_kb_engine.build.vectors import VectorsBuild
+
+    vectors = isinstance(result, VectorsBuild)
+    target = Target.VECTOR_DATABASE if vectors else Target.FOLDERS
     fields = {
         "Knowledge base": info.knowledge_base,
         "Version": info.version,
-        "Target": Target.FOLDERS.value,
+        "Target": target.value,
         "Ceiling": info.ceiling.value,
         "Classification": result.classification.value,
         "Location": location,
     }
     if info.content_commit:
         fields["Content commit"] = info.content_commit
+    if isinstance(result, VectorsBuild) and result.embedding:
+        fields["Embedding model"] = f"{result.embedding['model']}, {result.embedding['where']}"
     cli.command_name = "/kb-build"
-    build = cli.new("KBUILD", title, fields, intent=f"the folders build {info.version}", tier="build")["id"]
+    build = cli.new("KBUILD", title, fields, intent=f"the {target.value} build {info.version}", tier="build")["id"]
+    chunks = f" in {result.chunks} chunks" if isinstance(result, VectorsBuild) else ""
     contents = (
-        f"{result.documents} documents and {result.pointers} pointers, format `kbm-build/1`, target folders; "
-        f"{result.left_out} left out by the ceiling ({info.ceiling.value}) or as broken pointers."
+        f"{result.documents} documents and {result.pointers} pointers{chunks}, format `kbm-build/1`, target "
+        f"{target.value}; {result.left_out} left out by the ceiling ({info.ceiling.value}) or as broken pointers."
     )
     cli.write_section(build, "Contents", contents, intent="what the build contains", tier="build")
     cli.status(build, "Built", intent="the build is written", tier="build")

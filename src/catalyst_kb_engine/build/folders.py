@@ -120,33 +120,45 @@ def _front(meta: dict[str, Any], body: str) -> str:
     return "---\n" + yaml.safe_dump(meta, sort_keys=False, allow_unicode=True) + "---\n\n" + body
 
 
-def build_folders(repo: Path, out: Path, info: BuildInfo) -> FoldersBuild:
-    """Write the folders build of the knowledge base repository `repo` into `out` (new or empty)."""
-    if out.exists() and any(out.iterdir()):
-        raise BuildError(f"{out} is not empty: a build is written once, into its own version")
+@dataclass
+class Selection:
+    """What a build takes from the repository: what is at or below the ceiling, and what was left out."""
+
+    kept: list[_Entry]
+    classification: Classification
+    documents: int
+    pointers: int
+    left_out: int
+
+
+def select(repo: Path, info: BuildInfo) -> Selection:
+    """The documents and pointers a build takes; refuses unmarked ones (KBM INV-KB-4) and a floor above the ceiling."""
     documents, unmarked, _ = _read(repo, "docs", info, pointer=False)
     pointers, unmarked_pointers, broken = _read(repo, "pointers", info, pointer=True)
-    if unmarked or unmarked_pointers:  # KBM INV-KB-4: nothing unmarked reaches a build
+    if unmarked or unmarked_pointers:
         listed = ", ".join(str(p) for p in [*unmarked, *unmarked_pointers])
         raise BuildError(f"unmarked, so nothing is built: {listed}")
-    kept = [e for e in [*documents, *pointers] if e.effective.rank <= info.ceiling.rank]
+    kept = sorted((e for e in [*documents, *pointers] if e.effective.rank <= info.ceiling.rank), key=lambda e: e.path)
     paths = [e.path for e in kept]
     if len(paths) != len(set(paths)):
         raise BuildError("a pointer and a document share a path; rename one")
-
-    result = FoldersBuild(
-        out=out,
-        classification=Classification.highest(info.floor, *(e.effective for e in kept)),
+    classification = Classification.highest(info.floor, *(e.effective for e in kept))
+    if classification.rank > info.ceiling.rank:
+        raise BuildError(f"the knowledge base's floor {info.floor.value} is above the ceiling {info.ceiling.value}")
+    return Selection(
+        kept=kept,
+        classification=classification,
         documents=sum(not e.pointer for e in kept),
         pointers=sum(e.pointer for e in kept),
         left_out=len(documents) + len(pointers) - len(kept) + broken,
     )
-    if result.classification.rank > info.ceiling.rank:
-        raise BuildError(f"the knowledge base's floor {info.floor.value} is above the ceiling {info.ceiling.value}")
 
+
+def stage_documents(selection: Selection, info: BuildInfo) -> dict[str, bytes]:
+    """`docs/` (each document with its effective classification and content hash) and `index.md`."""
     staged: dict[str, bytes] = {}
     lines = []
-    for entry in sorted(kept, key=lambda e: e.path):
+    for entry in selection.kept:
         meta = dict(entry.meta)
         meta["classification"] = entry.effective.value
         meta.pop("hash", None)
@@ -160,29 +172,56 @@ def build_folders(repo: Path, out: Path, info: BuildInfo) -> FoldersBuild:
         + ("\n".join(lines) if lines else "*(no document at or below the ceiling)*")
         + "\n"
     ).encode("utf-8")
-    staged["README.md"] = _readme(info, result).encode("utf-8")
-    result.files = {name: _sha(data) for name, data in sorted(staged.items())}
+    return staged
 
+
+def refuse_written(out: Path) -> None:
+    if out.exists() and any(out.iterdir()):
+        raise BuildError(f"{out} is not empty: a build is written once, into its own version")
+
+
+def write_build(out: Path, staged: dict[str, bytes], info: BuildInfo, selection: Selection, **more: Any) -> dict:
+    """Every staged file, then `manifest.json` with each one's SHA-256 (`kbm-build/1`); returns the manifest."""
     built = (info.built or datetime.now(UTC)).astimezone(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
     manifest = {
         "format": FORMAT,
-        "target": "folders",
+        **{k: v for k, v in more.items() if k == "target"},
         "knowledge_base": info.knowledge_base,
         "build": info.build,
         "version": info.version,
-        "classification": result.classification.value,
+        "classification": selection.classification.value,
         "ceiling": info.ceiling.value,
         "content_commit": info.content_commit,
-        "counts": {"documents": result.documents, "pointers": result.pointers, "left_out": result.left_out},
-        "files": result.files,
+        **{k: v for k, v in more.items() if k not in ("target", "counts")},
+        "counts": more.get("counts")
+        or {"documents": selection.documents, "pointers": selection.pointers, "left_out": selection.left_out},
+        "files": {name: _sha(data) for name, data in sorted(staged.items())},
         "built": built,
     }
-    staged["manifest.json"] = (json.dumps(manifest, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
-
-    for name, data in staged.items():
+    for name, data in {
+        **staged,
+        "manifest.json": (json.dumps(manifest, indent=2, ensure_ascii=False) + "\n").encode(),
+    }.items():
         target = out / name
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(data)
+    return manifest
+
+
+def build_folders(repo: Path, out: Path, info: BuildInfo) -> FoldersBuild:
+    """Write the folders build of the knowledge base repository `repo` into `out` (new or empty)."""
+    refuse_written(out)
+    selection = select(repo, info)
+    result = FoldersBuild(
+        out=out,
+        classification=selection.classification,
+        documents=selection.documents,
+        pointers=selection.pointers,
+        left_out=selection.left_out,
+    )
+    staged = stage_documents(selection, info)
+    staged["README.md"] = _readme(info, result).encode("utf-8")
+    result.files = write_build(out, staged, info, selection, target="folders")["files"]
     return result
 
 

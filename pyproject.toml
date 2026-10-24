@@ -1,6 +1,6 @@
 [project]
 name = "catalyst-kb-engine"
-version = "0.2.0"
+version = "0.3.0"
 description = "The knowledge base module's engine: onboarding and builds as workflows (Pydantic AI, pydantic-graph), producing organized markdown folders or vector databases any model can read"
 readme = "README.md"
 license = "Apache-2.0"
@@ -18,8 +18,17 @@ dependencies = [
 [project.scripts]
 catalyst-kb-engine = "catalyst_kb_engine.cli:main"
 
+[project.optional-dependencies]
+vectors = [
+    "pyarrow>=17",
+]
+openai = [
+    "pydantic-ai-slim[openai]>=2.61",
+]
+
 [dependency-groups]
 dev = [
+    "pyarrow>=17",
     "pytest>=8",
     "ruff>=0.7",
 ]
