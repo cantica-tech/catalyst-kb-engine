@@ -154,9 +154,7 @@ def build_folders(repo: Path, out: Path, info: BuildInfo) -> FoldersBuild:
         staged[f"docs/{entry.path}"] = _front(meta, entry.body).encode("utf-8")
         title = str(meta.get("title") or Path(entry.path).stem)
         summary = _summary(entry.body)
-        lines.append(
-            f"- [{title}](docs/{entry.path}) ({entry.effective.value}){' — ' + summary if summary else ''}"
-        )
+        lines.append(f"- [{title}](docs/{entry.path}) ({entry.effective.value}){' — ' + summary if summary else ''}")
     staged["index.md"] = (
         f"# Index of {info.knowledge_base} {info.version}\n\n"
         + ("\n".join(lines) if lines else "*(no document at or below the ceiling)*")
