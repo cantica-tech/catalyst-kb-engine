@@ -1,0 +1,104 @@
+"""What onboarding decides (KBM `kbm-ONBOARDING-000001`, `kbm-MODEL-000001`), as typed, validated data.
+
+The values are the knowledge base module's own field values, so a plan maps one to one onto a `KB-` record's
+`Basis`, `Document base` and `Target`.
+"""
+
+from __future__ import annotations
+
+from enum import StrEnum
+
+from pydantic import BaseModel, Field, model_validator
+
+CRITERION_SCHEME = "criterion:"
+"""A source whose location starts with this is a catalyst criterion, read through catalyst's CLI."""
+
+
+class Basis(StrEnum):
+    CRITERION = "Criterion"
+    DOCUMENTS = "Documents"
+
+
+class DocumentBase(StrEnum):
+    STATIC = "Static"
+    DYNAMIC = "Dynamic"
+
+
+class Target(StrEnum):
+    FOLDERS = "Folders"
+    VECTOR_DATABASE = "Vector database"
+
+
+class Classification(StrEnum):
+    PUBLIC = "Public"
+    INTERNAL = "Internal"
+    CONFIDENTIAL = "Confidential"
+    RESTRICTED = "Restricted"
+
+    @property
+    def rank(self) -> int:
+        return list(Classification).index(self)
+
+    @classmethod
+    def highest(cls, *levels: Classification) -> Classification:
+        return max(levels, key=lambda level: level.rank)
+
+
+class Source(BaseModel):
+    """A place the knowledge base draws on: a `KSOURCE-` once recorded."""
+
+    title: str = Field(min_length=1)
+    location: str = Field(min_length=1, description="a URL, a path, or `criterion:<project name>`")
+    classification: Classification | None = Field(default=None, description="its mark; else the policy's")
+    access: str | None = Field(default=None, description="how it is reached, if not plainly")
+
+    @property
+    def is_criterion(self) -> bool:
+        return self.location.startswith(CRITERION_SCHEME)
+
+
+class Folder(BaseModel):
+    """One folder of the knowledge base's organization: a path under `docs/`, and what it holds."""
+
+    path: str = Field(min_length=1, pattern=r"^[a-z0-9][a-z0-9-]*(/[a-z0-9][a-z0-9-]*)*$")
+    holds: str = Field(min_length=1)
+
+
+class Layout(BaseModel):
+    """The location and storage strategy: where the repository lives, and how its documents are organized."""
+
+    repository: str = Field(min_length=1, description="a git URL, or a path on this machine")
+    folders: list[Folder] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _distinct_folders(self) -> Layout:
+        paths = [f.path for f in self.folders]
+        if len(paths) != len(set(paths)):
+            raise ValueError("each folder appears once")
+        return self
+
+
+class OnboardingPlan(BaseModel):
+    """Everything onboarding decided: what `/kb-setup` records as the `KB-` and its `KSOURCE-`s."""
+
+    basis: Basis
+    sources: list[Source] = Field(min_length=1)
+    layout: Layout
+    target: Target
+    document_base: DocumentBase
+
+    @model_validator(mode="after")
+    def _sources_fit_the_basis(self) -> OnboardingPlan:
+        criteria = [s for s in self.sources if s.is_criterion]
+        if self.basis is Basis.CRITERION and (len(criteria) != 1 or not self.sources[0].is_criterion):
+            raise ValueError(
+                "a criterion-based knowledge base has the criterion as its first and only criterion source"
+            )
+        if self.basis is Basis.DOCUMENTS and criteria:
+            raise ValueError("a documents-based knowledge base draws on no criterion")
+        return self
+
+
+def default_document_base(basis: Basis) -> DocumentBase:
+    """Dynamic for a criterion-based knowledge base, a criterion always being in flux; static otherwise."""
+    return DocumentBase.DYNAMIC if basis is Basis.CRITERION else DocumentBase.STATIC
