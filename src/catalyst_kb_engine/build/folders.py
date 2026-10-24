@@ -105,8 +105,8 @@ def _read(repo: Path, folder: str, info: BuildInfo, pointer: bool) -> tuple[list
 
 
 def _summary(body: str) -> str:
-    for line in body.splitlines():
-        line = line.strip()
+    for raw in body.splitlines():
+        line = raw.strip()
         if line and not line.startswith("#"):
             return line if len(line) <= 160 else line[:157] + "..."
     return ""
