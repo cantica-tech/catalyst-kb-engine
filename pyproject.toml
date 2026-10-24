@@ -1,0 +1,32 @@
+[project]
+name = "catalyst-kb-engine"
+version = "0.1.0"
+description = "The knowledge base module's engine: onboarding and builds as workflows (Pydantic AI, pydantic-graph), producing organized markdown folders or vector databases any model can read"
+readme = "README.md"
+license = "Apache-2.0"
+authors = [
+    { name = "Olivier Steck", email = "osteck@gmail.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.11",
+    "pydantic-ai-slim>=2.61",
+    "pydantic-graph>=2.61",
+    "pyyaml>=6",
+]
+
+[project.scripts]
+catalyst-kb-engine = "catalyst_kb_engine.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.7",
+]
+
+[build-system]
+requires = ["uv_build>=0.11.26,<0.12.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
