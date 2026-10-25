@@ -1,6 +1,8 @@
 """`catalyst-kb-engine`: `onboard` runs the onboarding workflow with a person at the terminal (`--record` writes it to
 the criterion); `read-sources` reads a knowledge base's sources into a private staging directory a build can read;
-`build-folders` writes a folders build (`--record` records it); `plan` reads a recorded knowledge base back. Records go through catalyst's CLI (`CATALYST_CLI`, else `catalyst`). Exit codes: 0 done, 1 refused or failed,
+`build-folders` writes a folders build (`--record` records it); `search` searches a vector build, `mcp` serves that
+search as an MCP tool, `evaluate` scores it against an evaluation set (`--record` keeps the score with the build);
+`plan` reads a recorded knowledge base back. Records go through catalyst's CLI (`CATALYST_CLI`, else `catalyst`). Exit codes: 0 done, 1 refused or failed,
 2 usage."""
 
 from __future__ import annotations
@@ -95,6 +97,34 @@ def _read_sources(args: argparse.Namespace) -> int:
         workers=args.workers,
     )
     print(json.dumps(summary(staged), indent=2))
+    return 0
+
+
+def _search(args: argparse.Namespace) -> int:
+    from catalyst_kb_engine.search import BuildIndex, Mode, render
+
+    passages = asyncio.run(BuildIndex(Path(args.build)).search(args.question, k=args.k, mode=Mode(args.mode)))
+    print(json.dumps([p.record() for p in passages], indent=2) if args.json else render(passages))
+    return 0
+
+
+def _mcp(args: argparse.Namespace) -> int:
+    from catalyst_kb_engine.mcp_server import serve
+
+    serve(Path(args.build))
+    return 0
+
+
+def _evaluate(args: argparse.Namespace) -> int:
+    from catalyst_kb_engine.evaluate import evaluate, verification
+    from catalyst_kb_engine.search import BuildIndex, load_questions
+
+    score = asyncio.run(evaluate(BuildIndex(Path(args.build)), load_questions(Path(args.questions)), k=args.k))
+    if args.record:
+        cli = CatalystCLI(Path(args.project_root), command_name="/kb-build")
+        text = verification(score, Path(args.questions).name)
+        cli.write_section(args.record, "Verification", text, intent="the build's search, scored", tier="build")
+    print(json.dumps(score, indent=2))
     return 0
 
 
@@ -217,9 +247,23 @@ def _parser() -> argparse.ArgumentParser:
     v.add_argument("--content-commit", help="the repository's commit it is built from")
     v.add_argument("--record", action="store_true", help="record it as a KBUILD- in the criterion, Built")
     v.add_argument("--location", help="with --record: where the build is kept (default: the output directory)")
+    modes = ["hybrid", "keyword", "vector"]
+    s = sub.add_parser("search", help="search a vector database build: passages citing their sources")
+    s.add_argument("question")
+    s.add_argument("--build", required=True, help="the vector database build's directory")
+    s.add_argument("-k", type=int, default=8, help="how many passages (default 8)")
+    s.add_argument("--mode", choices=modes, default="hybrid")
+    s.add_argument("--json", action="store_true", help="the passages as JSON")
+    m = sub.add_parser("mcp", help="serve a vector build's search as an MCP tool, over stdio")
+    m.add_argument("--build", required=True, help="the vector database build's directory")
+    e = sub.add_parser("evaluate", help="score a vector build's search against an evaluation set")
+    e.add_argument("questions", help="the evaluation set (YAML: questions, each id, question, expect)")
+    e.add_argument("--build", required=True, help="the vector database build's directory")
+    e.add_argument("-k", type=int, default=10, help="how many passages count (default 10)")
+    e.add_argument("--record", metavar="KBUILD", help="write the score into this KBUILD-'s Verification")
     pl = sub.add_parser("plan", help="read a recorded knowledge base back into its onboarding plan")
     pl.add_argument("kb", help="the KB- ID")
-    for p in (o, r, b, v, pl):
+    for p in (o, r, b, v, e, pl):
         p.add_argument("--project-root", default=".", help="the catalyst project (default: here)")
     return parser
 
@@ -237,6 +281,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             "read-sources": _read_sources,
             "build-folders": _build_folders,
             "build-vectors": _build_vectors,
+            "search": _search,
+            "mcp": _mcp,
+            "evaluate": _evaluate,
             "plan": _plan,
         }[args.command](args)
     except (BuildError, CatalystError, SourceError, ValidationError, ValueError) as err:

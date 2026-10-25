@@ -1,6 +1,6 @@
 [project]
 name = "catalyst-kb-engine"
-version = "0.4.0"
+version = "0.5.0"
 description = "The knowledge base module's engine: onboarding and builds as workflows (Pydantic AI, pydantic-graph), producing organized markdown folders or vector databases any model can read"
 readme = "README.md"
 license = "Apache-2.0"
@@ -25,9 +25,20 @@ vectors = [
 openai = [
     "pydantic-ai-slim[openai]>=2.61",
 ]
+search = [
+    "numpy>=1.26",
+    "pyarrow>=17",
+]
+mcp = [
+    "mcp>=2.3",
+    "numpy>=1.26",
+    "pyarrow>=17",
+]
 
 [dependency-groups]
 dev = [
+    "mcp>=2.3",
+    "numpy>=1.26",
     "pyarrow>=17",
     "pytest>=8",
     "ruff>=0.7",

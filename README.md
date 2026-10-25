@@ -15,7 +15,7 @@ Status: in development. The design and the technology research behind it are in 
 ## Using it
 
 ```sh
-uv tool install "catalyst-kb-engine[vectors,openai]"   # vectors: pyarrow; openai: Ollama and OpenAI-compatible models
+uv tool install "catalyst-kb-engine[vectors,openai,search,mcp]"   # search: numpy; mcp: the MCP server
 
 catalyst-kb-engine onboard "Support KB" --project app --other-module software-engineering   # you decide each step
 catalyst-kb-engine onboard "Support KB" … --record --serves <rule IDs> --classification Internal
@@ -24,6 +24,9 @@ catalyst-kb-engine read-sources KB-… <staging dir> --projects-dir ~/sources [-
 catalyst-kb-engine build-folders <kb repo> builds/1.0.0 --kb KB-… --version 1.0.0 --floor Internal --record
 catalyst-kb-engine build-vectors <kb repo> builds/1.0.0 --kb KB-… --version 1.0.0 --floor Internal \
     --local-model ollama:nomic-embed-text [--hosted-model openai:text-embedding-3-small --hosted-up-to Internal]
+catalyst-kb-engine search "who approves an invoice?" --build builds/1.0.0 [-k 8] [--mode hybrid|keyword|vector]
+catalyst-kb-engine mcp --build builds/1.0.0                                             # the same, as an MCP tool
+catalyst-kb-engine evaluate questions.yaml --build builds/1.0.0 [--record KBUILD-…]     # score it
 ```
 
 Records go through catalyst's CLI (`CATALYST_CLI`, else `catalyst`), in the project (`--project-root`). A vector
@@ -38,6 +41,15 @@ markdown. Each source's visibility is checked against GitHub first, and any disa
 document from a private source is at least `Internal`, and `--public-only` never opens a private source. The staging
 directory holds private data whenever a private source was read: keep it out of any public repository. Checkouts are
 found as `<--projects-dir>/<name>`, or given with `--project <name>=<dir>`; `gh` must be logged in.
+
+`search` reads a vector build and writes nothing. It merges keywords (SQLite FTS5) and vectors (the question embedded
+with the build's own model, from its manifest) by reciprocal rank. Each passage cites its document, heading,
+classification and source, and for a criterion document its entity's ID. `mcp` serves the same search over stdio,
+for an agent on the machine that keeps the build. `evaluate` runs an evaluation set (YAML: `questions`, each with an
+`id`, a `question` and `expect`, the entity IDs or document paths a good answer cites) in every mode. It reports
+recall at k and mean reciprocal rank, and names only the missed questions' IDs. `--record` writes the score into the
+build's `KBUILD-` `Verification`. An evaluation set drawn from private sources is private: keep it in the knowledge
+base's criterion.
 
 ## Development
 

@@ -2,7 +2,7 @@
 
 The handoff log of the catalyst-docs lead. Read it with [`catalyst-docs-lead.md`](catalyst-docs-lead.md) (the brief)
 and [`design/01-catalyst-docs.md`](design/01-catalyst-docs.md) (the design). The second lead session (2026-10-25)
-shipped KBM 0.6.0, phase 0 and phase 1.
+shipped KBM 0.6.0 and phases 0 to 2.
 
 ## State of each phase
 
@@ -11,8 +11,8 @@ shipped KBM 0.6.0, phase 0 and phase 1.
 | KBM   | **done**: knowledge-base 0.6.0 released, in the distribution repo | `REQ-000002-I3JORbi9` (KBM's criterion, Completed)          |
 | 0     | **done**: both repositories, `KB-000002-erFhHt6m` `Active`      | the catalyst-docs criterion                                |
 | 1     | **done**: catalyst-kb-engine 0.4.0, `read-sources`             | `REQ-000004-7TE7wuaB` (the engine's criterion)              |
-| 2     | next                                                         | none yet                                                   |
-| 3     | not started                                                  | none yet                                                   |
+| 2     | **done**: catalyst-kb-engine 0.5.0, `search`, `mcp`, `evaluate` | `REQ-000005-7TE7wuaB`; catalyst-docs' `KBUILD-000001-erFhHt6m` |
+| 3     | next                                                         | none yet                                                   |
 | 4–6   | not started                                                  | none yet                                                   |
 
 ## What exists
@@ -29,6 +29,11 @@ shipped KBM 0.6.0, phase 0 and phase 1.
   catalyst, catalyst-users, catalyst-ui, catalyst-knowledge-base and catalyst-kb-engine. `000008` and `000014` are
   retired, since catalyst-users-kb was deleted at the owner's request.
 - **The engine's `read-sources`** stages a knowledge base's live sources in the `docs/` layout the builds read.
+- **The realm build 0.1.0** (`KBUILD-000001-erFhHt6m`, `Built`): 913 documents, 6,791 chunks, `nomic-embed-text`
+  local, in `~/.catalyst/projects/catalyst-docs/realm/builds/0.1.0`. `realm/run-0.1.0.sh` there rebuilds it.
+- **The evaluation set**: 52 questions in the catalyst-docs criterion,
+  `knowledge-bases/evaluations/KB-000002-erFhHt6m.yaml`. The first score at k 10: hybrid recall 0.712 (MRR 0.389),
+  keyword 0.673, vector 0.635.
 
 ## Decided by the owner (2026-10-25)
 
@@ -36,7 +41,7 @@ shipped KBM 0.6.0, phase 0 and phase 1.
 - **The evaluation set** (the realm search's questions and expected answers) lives in the catalyst-docs criterion.
 - KBM releases go to the distribution repository as well.
 
-## Findings for phases 2 and 3
+## Findings for phase 3 and beyond
 
 - **A full read takes about 2.5 minutes**, CPU-bound: each `catalyst view` is a new Python process, about 0.8 s of CPU.
   Phase 3's incremental builds are the remedy: re-view only the entities whose journal moved since the last read.
@@ -50,17 +55,25 @@ shipped KBM 0.6.0, phase 0 and phase 1.
 - **The realm build's home**: private local storage, outside any repository, for example
   `~/.catalyst/projects/catalyst-docs/realm/`. That is beside the criterion, never in it, since the criterion is
   shared through git.
-- **Python packages**: the engine has neither `numpy` nor `mcp`. Phase 2 needs them as optional extras.
+- **Raising the score**, two candidates, each needing a rebuild:
+  - embed each chunk with its document's title and heading, not its text alone, since short rules lose their title;
+  - use `nomic-embed-text`'s task prefixes (`search_document:`, `search_query:`), recorded in the manifest.
+
+  Measure each against the evaluation set before keeping it.
+- **A vector build of the realm takes about 25 minutes** on this machine's CPU. Incremental builds (phase 3) re-embed
+  only changed documents.
+- **Extras**: `search` (numpy, pyarrow) and `mcp` (mcp 2.x, where `FastMCP` is now `MCPServer`).
 - **Local models**: Ollama runs `nomic-embed-text`, `llama3.2:3b` and `codestral`.
 
 ## The exact next step
 
-Phase 2: the realm build over `read-sources`' staging directory (a vector build with `ollama:nomic-embed-text`). Then
-`search` and its MCP tool (hybrid: SQLite FTS5 and vectors), and the evaluation set in the catalyst-docs criterion,
-its score recorded with the build. Open a `REQ-` in the engine's criterion first.
+Phase 3: incremental builds. A rebuild after one change reprocesses only that change. Reuse each unchanged
+document's chunks and vectors by its content hash; re-view only the entities whose journal moved. The manifest says
+which were reused. Open a `REQ-` in the engine's criterion first.
 
 ## Open for the owner
 
 - **catalyst-docs' uncommitted files** (`KB.md`, `docs/user-generated/project-map.md`) are another session's, waiting
   on the owner's commit ask. The same goes for the catalyst-docs criterion's unshared entries (the two retirements and
-  the Policy edit).
+  the Policy edit). The realm build's record and the evaluation set are unshared there too: a `share push` would
+  publish all of them together, so it waits for the owner.
