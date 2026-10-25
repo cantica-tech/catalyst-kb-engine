@@ -19,7 +19,9 @@ from catalyst_kb_engine.models import (
     Layout,
     OnboardingPlan,
     Source,
+    SourceKind,
     Target,
+    Visibility,
 )
 
 UNSET = "*(none yet)*"
@@ -82,6 +84,10 @@ def record_onboarding(cli: CatalystCLI, policy: KbPolicy, plan: OnboardingPlan) 
             fields["Classification"] = source.classification.value
         if source.access:
             fields["Access"] = source.access
+        if source.kind:
+            fields["Kind"] = source.kind.value
+        if source.visibility:
+            fields["Visibility"] = source.visibility.value
         what = "the criterion it is built on" if source.is_criterion else "a source onboarding selected"
         sources.append(cli.new("KSOURCE", source.title, fields, intent=what, tier="kb")["id"])
     cli.write_section(kb, "Structure", structure(plan.layout), intent="the folder plan onboarding decided", tier="kb")
@@ -93,21 +99,50 @@ def _value(record: dict[str, Any], name: str) -> str | None:
     return None if value in (None, "", UNSET) else str(value).strip()
 
 
+def _source(record: dict[str, Any]) -> Source:
+    mark, kind, visibility = (_value(record, n) for n in ("Classification", "Kind", "Visibility"))
+    return Source(
+        title=record["title"],
+        location=_value(record, "Location") or "",
+        classification=Classification(mark) if mark and mark != "Unmarked" else None,
+        access=_value(record, "Access"),
+        kind=SourceKind(kind) if kind else None,
+        visibility=Visibility(visibility) if visibility else None,
+    )
+
+
+def _sources(cli: CatalystCLI, record: dict[str, Any]) -> list[tuple[str, Source]]:
+    return [(source_id, _source(cli.view(source_id))) for source_id in _IDS.findall(record.get("Sources") or "")]
+
+
+@dataclass(frozen=True)
+class KnowledgeBase:
+    """A recorded knowledge base as reading its sources needs it: its policy, and its sources by `KSOURCE-` ID."""
+
+    id: str
+    classification: Classification
+    default_classification: Classification
+    sources: list[tuple[str, Source]]
+
+
+def read_knowledge_base(cli: CatalystCLI, kb: str) -> KnowledgeBase:
+    """A `KB-` and its `KSOURCE-`s; retired sources are left out."""
+    record = cli.view(kb)
+    floor, default = _value(record, "Classification"), _value(record, "Default classification")
+    if not (floor and default):
+        raise ValueError(f"{kb} has no Classification or Default classification")
+    sources = [
+        (source_id, _source(view))
+        for source_id in _IDS.findall(record.get("Sources") or "")
+        if _value(view := cli.view(source_id), "Status") != "Retired"
+    ]
+    return KnowledgeBase(kb, Classification(floor), Classification(default), sources)
+
+
 def read_plan(cli: CatalystCLI, kb: str) -> OnboardingPlan:
     """A recorded knowledge base, read back into its onboarding plan: how a workflow resumes."""
     record = cli.view(kb)
-    sources = []
-    for source_id in _IDS.findall(record.get("Sources") or ""):
-        s = cli.view(source_id)
-        mark = _value(s, "Classification")
-        sources.append(
-            Source(
-                title=s["title"],
-                location=_value(s, "Location") or "",
-                classification=Classification(mark) if mark and mark != "Unmarked" else None,
-                access=_value(s, "Access"),
-            )
-        )
+    sources = [source for _, source in _sources(cli, record)]
     sources.sort(key=lambda s: not s.is_criterion)  # the criterion first, as onboarding records it
     text = next((x["text"] for x in record.get("sections", []) if x["heading"] == "Structure"), "")
     folders = [Folder(path=m["path"], holds=m["holds"].strip()) for m in _FOLDER.finditer(text)]

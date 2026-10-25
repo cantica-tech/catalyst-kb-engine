@@ -1,6 +1,6 @@
 """`catalyst-kb-engine`: `onboard` runs the onboarding workflow with a person at the terminal (`--record` writes it to
-the criterion); `build-folders` writes a folders build (`--record` records it); `plan` reads a recorded knowledge base
-back. Records go through catalyst's CLI (`CATALYST_CLI`, else `catalyst`). Exit codes: 0 done, 1 refused or failed,
+the criterion); `read-sources` reads a knowledge base's sources into a private staging directory a build can read;
+`build-folders` writes a folders build (`--record` records it); `plan` reads a recorded knowledge base back. Records go through catalyst's CLI (`CATALYST_CLI`, else `catalyst`). Exit codes: 0 done, 1 refused or failed,
 2 usage."""
 
 from __future__ import annotations
@@ -21,7 +21,8 @@ from catalyst_kb_engine.build.folders import BuildError, BuildInfo, build_folder
 from catalyst_kb_engine.catalyst import CatalystCLI, CatalystError
 from catalyst_kb_engine.models import Classification
 from catalyst_kb_engine.onboarding import AgentProposer, OnboardingContext, onboard
-from catalyst_kb_engine.record import KbPolicy, read_plan, record_build, record_onboarding
+from catalyst_kb_engine.record import KbPolicy, read_knowledge_base, read_plan, record_build, record_onboarding
+from catalyst_kb_engine.sources.visibility import Projects, SourceError
 
 P = TypeVar("P", bound=BaseModel)
 
@@ -71,6 +72,29 @@ def _onboard(args: argparse.Namespace) -> int:
 
 def _plan(args: argparse.Namespace) -> int:
     print(read_plan(CatalystCLI(Path(args.project_root)), args.kb).model_dump_json(indent=2))
+    return 0
+
+
+def _read_sources(args: argparse.Namespace) -> int:
+    from catalyst_kb_engine.sources.stage import stage, summary
+
+    cli = CatalystCLI(Path(args.project_root))
+    overrides = {}
+    for given in args.project or []:
+        name, sep, directory = given.partition("=")
+        if not sep or not name or not directory:
+            raise ValueError(f"--project takes <name>=<dir>, not {given!r}")
+        overrides[name] = Path(directory).expanduser()
+    projects = Projects(Path(args.projects_dir).expanduser() if args.projects_dir else None, overrides)
+    staged = stage(
+        read_knowledge_base(cli, args.kb),
+        Path(args.out),
+        projects,
+        public_only=args.public_only,
+        catalyst=lambda project: CatalystCLI(project, command=cli.command),
+        workers=args.workers,
+    )
+    print(json.dumps(summary(staged), indent=2))
     return 0
 
 
@@ -154,6 +178,13 @@ def _parser() -> argparse.ArgumentParser:
     o.add_argument("--hosted-up-to", choices=["Local only", *levels], default="Local only")
     o.add_argument("--freshness", default="30 days")
     o.add_argument("--curator")
+    r = sub.add_parser("read-sources", help="read a knowledge base's sources into a staging directory (private data)")
+    r.add_argument("kb", help="the KB- ID")
+    r.add_argument("out", help="the staging directory, new or empty; private whenever a private source is read")
+    r.add_argument("--projects-dir", help="the directory holding the sources' checkouts, each under its own name")
+    r.add_argument("--project", action="append", help="<name>=<dir>: a checkout elsewhere (repeatable)")
+    r.add_argument("--public-only", action="store_true", help="open public sources only (for a public build)")
+    r.add_argument("--workers", type=int, default=8, help="parallel catalyst calls per criterion")
     b = sub.add_parser("build-folders", help="write a folders build of a knowledge base repository")
     b.add_argument("repository", help="the knowledge base repository (docs/, pointers/)")
     b.add_argument("out", help="the build's directory, new or empty")
@@ -188,7 +219,7 @@ def _parser() -> argparse.ArgumentParser:
     v.add_argument("--location", help="with --record: where the build is kept (default: the output directory)")
     pl = sub.add_parser("plan", help="read a recorded knowledge base back into its onboarding plan")
     pl.add_argument("kb", help="the KB- ID")
-    for p in (o, b, v, pl):
+    for p in (o, r, b, v, pl):
         p.add_argument("--project-root", default=".", help="the catalyst project (default: here)")
     return parser
 
@@ -201,10 +232,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     except SystemExit as exit_:
         return int(exit_.code or 0)
     try:
-        return {"onboard": _onboard, "build-folders": _build_folders, "build-vectors": _build_vectors, "plan": _plan}[
-            args.command
-        ](args)
-    except (BuildError, CatalystError, ValidationError, ValueError) as err:
+        return {
+            "onboard": _onboard,
+            "read-sources": _read_sources,
+            "build-folders": _build_folders,
+            "build-vectors": _build_vectors,
+            "plan": _plan,
+        }[args.command](args)
+    except (BuildError, CatalystError, SourceError, ValidationError, ValueError) as err:
         print(f"catalyst-kb-engine: {err}", file=sys.stderr)
         return 1
 
