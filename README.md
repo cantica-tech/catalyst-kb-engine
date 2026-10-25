@@ -20,6 +20,7 @@ uv tool install "catalyst-kb-engine[vectors,openai]"   # vectors: pyarrow; opena
 catalyst-kb-engine onboard "Support KB" --project app --other-module software-engineering   # you decide each step
 catalyst-kb-engine onboard "Support KB" … --record --serves <rule IDs> --classification Internal
 catalyst-kb-engine plan KB-000001-…                                                     # read it back
+catalyst-kb-engine read-sources KB-… <staging dir> --projects-dir ~/sources [--public-only]   # its sources, staged
 catalyst-kb-engine build-folders <kb repo> builds/1.0.0 --kb KB-… --version 1.0.0 --floor Internal --record
 catalyst-kb-engine build-vectors <kb repo> builds/1.0.0 --kb KB-… --version 1.0.0 --floor Internal \
     --local-model ollama:nomic-embed-text [--hosted-model openai:text-embedding-3-small --hosted-up-to Internal]
@@ -29,6 +30,14 @@ Records go through catalyst's CLI (`CATALYST_CLI`, else `catalyst`), in the proj
 build uses one embedding model: the hosted one only when everything in it is within the knowledge base's
 `Hosted embedding up to`, else the local one; with neither allowed, nothing is built. Builds follow the knowledge
 base module's `kbm-build/1` format, readable by any model without catalyst.
+
+`read-sources` reads every live source of a knowledge base into a staging directory, in the layout the builds read:
+a catalyst criterion (`Kind` `Criterion`) through catalyst's CLI in its project, one document per entity and rule
+citing its ID, criterion and status with its own history; a GitHub repository from its checkout, its committed
+markdown. Each source's visibility is checked against GitHub first, and any disagreement stops the read. Every
+document from a private source is at least `Internal`, and `--public-only` never opens a private source. The staging
+directory holds private data whenever a private source was read: keep it out of any public repository. Checkouts are
+found as `<--projects-dir>/<name>`, or given with `--project <name>=<dir>`; `gh` must be logged in.
 
 ## Development
 

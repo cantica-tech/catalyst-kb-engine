@@ -44,6 +44,26 @@ class Classification(StrEnum):
         return max(levels, key=lambda level: level.rank)
 
 
+class SourceKind(StrEnum):
+    """KBM's `KSOURCE` `Kind` (`kbm-MODEL-000002`)."""
+
+    REPOSITORY = "Repository"
+    FOLDER = "Folder"
+    SITE = "Site"
+    CRITERION = "Criterion"
+
+
+class Visibility(StrEnum):
+    """KBM's `KSOURCE` `Visibility`: a `Private` source's documents are at least `Internal` (`rr-KB-002`)."""
+
+    PUBLIC = "Public"
+    PRIVATE = "Private"
+
+
+PRIVATE_FLOOR = Classification.INTERNAL
+"""The least classification of a document read from a private source."""
+
+
 class Source(BaseModel):
     """A place the knowledge base draws on: a `KSOURCE-` once recorded."""
 
@@ -51,10 +71,25 @@ class Source(BaseModel):
     location: str = Field(min_length=1, description="a URL, a path, or `criterion:<project name>`")
     classification: Classification | None = Field(default=None, description="its mark; else the policy's")
     access: str | None = Field(default=None, description="how it is reached, if not plainly")
+    kind: SourceKind | None = Field(default=None, description="what it is; a `criterion:` location is a criterion")
+    visibility: Visibility | None = Field(default=None, description="as its host shows it; unknown is private")
+
+    @model_validator(mode="after")
+    def _criterion_kind(self) -> Source:
+        if self.kind is None and self.is_criterion:
+            self.kind = SourceKind.CRITERION
+        if self.kind is not None and (self.kind is SourceKind.CRITERION) != self.is_criterion:
+            raise ValueError(f"a Criterion source, and only one, has a location `{CRITERION_SCHEME}<project name>`")
+        return self
 
     @property
     def is_criterion(self) -> bool:
         return self.location.startswith(CRITERION_SCHEME)
+
+    @property
+    def project(self) -> str | None:
+        """A criterion source's project name."""
+        return self.location.removeprefix(CRITERION_SCHEME) if self.is_criterion else None
 
 
 class Folder(BaseModel):
