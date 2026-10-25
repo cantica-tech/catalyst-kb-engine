@@ -10,7 +10,9 @@ rules or by a Pydantic AI agent, any model) and decided by a person, as a `pydan
 from __future__ import annotations
 
 import json
+import logging
 import re
+from collections.abc import Coroutine
 from dataclasses import dataclass, field
 from typing import Any, Protocol, TypeVar
 
@@ -30,6 +32,7 @@ from catalyst_kb_engine.models import (
 )
 
 P = TypeVar("P", bound=BaseModel)
+log = logging.getLogger(__name__)
 
 
 class OnboardingContext(BaseModel):
@@ -110,31 +113,52 @@ Propose only what the context supports; never invent a source's location."""
 
 @dataclass
 class AgentProposer:
-    """Proposals from a Pydantic AI agent, typed and validated (`eng-ARCH-000001`: any model, local or hosted)."""
+    """Proposals from a Pydantic AI agent, typed and validated (`eng-ARCH-000001`: any model, local or hosted).
+
+    A model that cannot give a valid proposal within `retries` (a small local model often cannot) does not stop the
+    workflow: the rules propose instead (`fallback`), the fallback is logged and kept in `fell_back`, and the person
+    decides as always (`eng-WORKFLOW-000002`, BUG-000001-7TE7wuaB)."""
 
     model: Any
     """A Pydantic AI model or model name, e.g. `ollama:llama3.2`, `anthropic:claude-sonnet-5-5`, or a test model."""
+    retries: int = 3
+    fallback: Proposer = field(default_factory=DefaultProposer)
+    fell_back: list[str] = field(default_factory=list)
 
-    async def _ask(self, output_type: type[P], question: str, **known: Any) -> P:
+    async def _ask(self, output_type: type[P], question: str, rules: Coroutine[Any, Any, P], **known: Any) -> P:
         from pydantic_ai import Agent
+        from pydantic_ai.exceptions import AgentRunError, ModelAPIError, UserError
 
-        agent = Agent(self.model, output_type=output_type, instructions=INSTRUCTIONS)
+        agent = Agent(self.model, output_type=output_type, instructions=INSTRUCTIONS, retries=self.retries)
         facts = {k: v.model_dump(mode="json") if isinstance(v, BaseModel) else v for k, v in known.items()}
-        result = await agent.run(f"{question}\n\nWhat is known:\n{json.dumps(facts, indent=2)}")
+        try:
+            result = await agent.run(f"{question}\n\nWhat is known:\n{json.dumps(facts, indent=2)}")
+        except (AgentRunError, ModelAPIError, UserError, ValueError) as err:
+            note = f"{question} The model gave no valid proposal ({err}); the rules propose instead."
+            self.fell_back.append(note)
+            log.warning(note)
+            return await rules
+        rules.close()  # not needed: the model answered
         return result.output
 
     async def sources(self, context: OnboardingContext) -> SourcesChoice:
-        return await self._ask(SourcesChoice, "Propose the basis and the sources.", context=context)
+        rules = self.fallback.sources(context)
+        return await self._ask(SourcesChoice, "Propose the basis and the sources.", rules, context=context)
 
     async def layout(self, context: OnboardingContext, sources: SourcesChoice) -> Layout:
-        return await self._ask(Layout, "Propose the repository and its folders.", context=context, sources=sources)
+        rules = self.fallback.layout(context, sources)
+        return await self._ask(
+            Layout, "Propose the repository and its folders.", rules, context=context, sources=sources
+        )
 
     async def target(self, context: OnboardingContext, sources: SourcesChoice) -> TargetChoice:
-        return await self._ask(TargetChoice, "Propose the target.", context=context, sources=sources)
+        rules = self.fallback.target(context, sources)
+        return await self._ask(TargetChoice, "Propose the target.", rules, context=context, sources=sources)
 
     async def document_base(self, context: OnboardingContext, sources: SourcesChoice) -> DocumentBaseChoice:
+        rules = self.fallback.document_base(context, sources)
         return await self._ask(
-            DocumentBaseChoice, "Propose whether its document base is static or dynamic.", context=context
+            DocumentBaseChoice, "Propose whether its document base is static or dynamic.", rules, context=context
         )
 
 

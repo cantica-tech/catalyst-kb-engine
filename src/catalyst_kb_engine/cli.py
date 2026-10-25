@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import logging
 import os
 import sys
 from collections.abc import Sequence
@@ -194,6 +195,7 @@ def _parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     os.environ.setdefault("PYDANTIC_AI_NO_BANNER", "1")
+    logging.basicConfig(level=logging.WARNING, format="catalyst-kb-engine: %(message)s")
     try:
         args = _parser().parse_args(argv)
     except SystemExit as exit_:

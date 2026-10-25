@@ -75,3 +75,17 @@ def test_an_agent_proposes_with_typed_output_and_the_person_still_decides():
     plan, _ = asyncio.run(onboard(BESIDE, person, AgentProposer(FunctionModel(_model))))
     assert plan.target is Target.VECTOR_DATABASE and plan.layout.repository == "../support-kb"
     assert len(person.seen) == 4  # every agent proposal went to the person
+
+
+def _garbage(messages, info: AgentInfo) -> ModelResponse:
+    """A small model's answer: the sources as a string, not a list of objects."""
+    return ModelResponse(parts=[ToolCallPart(info.output_tools[0].name, {"basis": "Criterion", "sources": '["a"]'})])
+
+
+def test_a_model_without_a_valid_proposal_falls_back_to_the_rules_and_the_person_still_decides():
+    person = Person()
+    proposer = AgentProposer(FunctionModel(_garbage), retries=1)
+    plan, _ = asyncio.run(onboard(BESIDE, person, proposer))
+    assert plan.basis is Basis.CRITERION and plan.sources[0].location == "criterion:app"  # the rules' proposal
+    assert len(person.seen) == 4 and len(proposer.fell_back) == 4
+    assert "the rules propose instead" in proposer.fell_back[0]
