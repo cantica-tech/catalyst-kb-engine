@@ -13,7 +13,7 @@ shipped KBM 0.6.0 and 0.6.1, and phases 0 to 3.
 | 1     | **done**: catalyst-kb-engine 0.4.0, `read-sources`             | `REQ-000004-7TE7wuaB` (the engine's criterion)              |
 | 2     | **done**: catalyst-kb-engine 0.5.0, `search`, `mcp`, `evaluate` | `REQ-000005-7TE7wuaB`; catalyst-docs' `KBUILD-000001-erFhHt6m` |
 | 3     | **done**: catalyst-kb-engine 0.6.0, `--previous` reads and builds | `REQ-000006-7TE7wuaB`, `REQ-000007-7TE7wuaB`; `KBUILD-000003-erFhHt6m` |
-| 4     | **outline drafted, waiting for the owner's approval**          | catalyst-docs' `GUIDE-OUTLINE.md` (uncommitted)            |
+| 4     | outline approved; pages 1–3 drafted, waiting for the owner's review | catalyst-docs' `GUIDE-OUTLINE.md`; `docs/guide/` (uncommitted) |
 | 5–6   | not started                                                  | none yet                                                   |
 
 ## What exists
@@ -67,14 +67,16 @@ shipped KBM 0.6.0 and 0.6.1, and phases 0 to 3.
 
 ## The exact next step
 
-Phase 4: the owner's answers on `GUIDE-OUTLINE.md` in the catalyst-docs checkout (twelve pages, each resting on public
-documents only, and three questions). Once it is approved, commit it, then draft the pages in the approved order under
-`docs/guide/`. Each page needs front matter with `classification: Public`, is drafted with the realm search, and is
-reviewed before it lands.
+Phase 4: the owner reviews pages 1 to 3 in catalyst-docs' `docs/guide/` (uncommitted). Commit them once approved, then
+draft pages 4 to 12 in batches, from public documents only. Each page carries front matter (`title`,
+`classification: Public`) and no body `#` heading. Several public documents are stale: catalyst's `README.md`,
+`GLOSSARY.md` and `beta/QUICKSTART.md` still describe `.criterion/` in the project and a `<name>.catalyst` pointer.
+The guide follows the current kernel (`CLI.md`, `INSTANTIATION-GUIDE.md`).
 
 ## Open for the owner
 
-- **The guide's outline** (`GUIDE-OUTLINE.md`): approve it, and answer its three questions (pages and order, designs
-  not yet built, who reviews).
+- **Pages 1 to 3** of the guide, for review.
+- **`docs/user-generated/project-map.md`** has no `classification`, so every build of catalyst-docs refuses to run.
+  Its content is public-safe: propose `Public` to the owner, the curator.
 - catalyst-docs' `development` has another session's commit (a project map; `KB.md` updated), not yet merged to
   `main`.
