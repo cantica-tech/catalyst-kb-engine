@@ -51,6 +51,11 @@ found as `<--projects-dir>/<name>`, or given with `--project <name>=<dir>`; `gh`
 What a `.catalystignore` opts out of catalyst (catalyst's `FORMAT.md` §11) is never part of a knowledge base: the
 builds skip it in the knowledge base repository, and `read-sources` skips it in a repository source.
 
+`read-sources --history N` also reads each repository source's last N commits, which needs full clones (a shallow
+clone is refused). Each document gains a `## History` section with the commits that touched its file, and each
+repository a `git-history.md` of its recent commits across all files, each with the files it changed. A commit gives
+its date, short hash, author's name and subject, never an e-mail address. History is classified like its repository.
+
 Builds can be incremental. `read-sources --previous <staging>` re-views, in each criterion whose source is unchanged,
 only the entities a journal entry since the previous read names or touched, the new ones, and what they cite. Every
 other document is carried over; repositories are always re-read. `build-vectors --previous <build>` reuses a chunk's
