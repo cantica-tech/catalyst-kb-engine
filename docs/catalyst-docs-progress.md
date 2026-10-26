@@ -61,8 +61,8 @@ shipped KBM 0.6.0 and 0.6.1, and phases 0 to 5.
 - **Rebuilding the realm** is now cheap. Run `read-sources --previous <last staging>` (18 seconds), then
   `build-vectors --previous <last build>` with `--embed-input context --document-prefix "search_document: "
   --query-prefix "search_query: "` (seconds when little changed). A full vector build takes about 46 minutes.
-- **What still misses**: 12 of 52 questions in hybrid mode. Keyword search is unchanged at 0.673, so better keyword
-  ranking (for example weighting titles) is the next lever. Measure it the same way.
+- **What still misses**: 11 of 52 questions in hybrid mode (0.788 at k 10, MRR 0.536), since 0.10.0 weights keyword
+  matches in a chunk's title 5 and heading 3 against 1 in its text. Measure any further change the same way.
 - **Extras**: `search` (numpy, pyarrow) and `mcp` (mcp 2.x, where `FastMCP` is now `MCPServer`).
 - **Local models**: Ollama runs `nomic-embed-text`, `llama3.2:3b` and `codestral`.
 
