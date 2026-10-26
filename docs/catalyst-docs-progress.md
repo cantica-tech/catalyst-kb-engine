@@ -13,7 +13,7 @@ shipped KBM 0.6.0 and 0.6.1, and phases 0 to 3.
 | 1     | **done**: catalyst-kb-engine 0.4.0, `read-sources`             | `REQ-000004-7TE7wuaB` (the engine's criterion)              |
 | 2     | **done**: catalyst-kb-engine 0.5.0, `search`, `mcp`, `evaluate` | `REQ-000005-7TE7wuaB`; catalyst-docs' `KBUILD-000001-erFhHt6m` |
 | 3     | **done**: catalyst-kb-engine 0.6.0, `--previous` reads and builds | `REQ-000006-7TE7wuaB`, `REQ-000007-7TE7wuaB`; `KBUILD-000003-erFhHt6m` |
-| 4     | next: the guide's outline, for the owner to approve           | none yet                                                   |
+| 4     | **outline drafted, waiting for the owner's approval**          | catalyst-docs' `GUIDE-OUTLINE.md` (uncommitted)            |
 | 5–6   | not started                                                  | none yet                                                   |
 
 ## What exists
@@ -67,12 +67,14 @@ shipped KBM 0.6.0 and 0.6.1, and phases 0 to 3.
 
 ## The exact next step
 
-Phase 4: the guide's outline (design 01 §5.3), drafted with the realm search and written for the public. A public
-guide page cites only public reference pages. The outline is the owner's to approve before any page is written.
+Phase 4: the owner's answers on `GUIDE-OUTLINE.md` in the catalyst-docs checkout (twelve pages, each resting on public
+documents only, and three questions). Once it is approved, commit it, then draft the pages in the approved order under
+`docs/guide/`. Each page needs front matter with `classification: Public`, is drafted with the realm search, and is
+reviewed before it lands.
 
 ## Open for the owner
 
-- **catalyst-docs' uncommitted files** (`KB.md`, `docs/user-generated/project-map.md`) are another session's, waiting
-  on the owner's commit ask. The same goes for the catalyst-docs criterion's unshared entries (the two retirements and
-  the Policy edit). The realm build's record and the evaluation set are unshared there too: a `share push` would
-  publish all of them together, so it waits for the owner.
+- **The guide's outline** (`GUIDE-OUTLINE.md`): approve it, and answer its three questions (pages and order, designs
+  not yet built, who reviews).
+- catalyst-docs' `development` has another session's commit (a project map; `KB.md` updated), not yet merged to
+  `main`.
