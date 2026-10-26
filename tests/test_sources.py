@@ -55,10 +55,13 @@ ROADMAP_ROW = {"id": "RM-000001-Ab3xR9pQ", "type": "RM"}
 class FakeCriterion(CatalystCLI):
     """catalyst's CLI in a project, as far as the reader uses it: `where`, `list all`, `view`."""
 
-    def __init__(self, project: Path, name: str = "app", views: tuple[dict, ...] = (REQ, RULE)) -> None:
+    def __init__(
+        self, project: Path, name: str = "app", views: tuple[dict, ...] = (REQ, RULE), journal: tuple[dict, ...] = ()
+    ) -> None:
         super().__init__(project=project, command=["catalyst"])
         self.name = name
         self.views = {v["id"]: v for v in views}
+        self.journal = list(journal)
         self.calls: list[list[str]] = []
 
     def run(self, *args: str) -> str:
@@ -70,7 +73,13 @@ class FakeCriterion(CatalystCLI):
             return json.dumps([*listed, META, ROADMAP_ROW])
         if args[0] == "view":
             return json.dumps(self.views[args[1]])
+        if args[:2] == ("journal", "show"):
+            return json.dumps(self.journal)
         raise AssertionError(args)
+
+    @property
+    def viewed(self) -> list[str]:
+        return sorted(c[1] for c in self.calls if c[0] == "view")
 
 
 def _hosts(**known: Visibility):
@@ -245,3 +254,59 @@ def test_a_knowledge_base_is_read_with_its_live_sources():
     assert [(sid, s.kind, s.visibility, s.classification) for sid, s in kb.sources] == [
         ("KSOURCE-000001-Ab3xR9pQ", SourceKind.CRITERION, Visibility.PRIVATE, None)
     ]
+
+
+BUG = {
+    "id": "BUG-000001-Ab3xR9pQ", "type": "BUG", "title": "Totals round wrongly", "file": "bugs/BUG-000001-totals.md",
+    "Status": "Open", "links": {}, "sections": [], "linked_from": [], "journal": [],
+}  # fmt: skip
+
+
+def test_an_incremental_read_re_views_only_what_moved_and_what_it_cites(tmp_path: Path, projects: Projects):
+    hosts, kb = HOSTS, _kb(("KSOURCE-2", CRITERION))
+    first = FakeCriterion(tmp_path, views=(REQ, RULE, BUG))
+    stage(kb, tmp_path / "1", projects, catalyst=lambda _: first, host=hosts)
+    assert first.viewed == sorted([REQ["id"], RULE["id"], BUG["id"]])
+
+    added = {**BUG, "id": "BUG-000002-Ab3xR9pQ", "file": "bugs/BUG-000002-new.md", "title": "New"}
+    moved = {
+        "artifact": REQ["id"],
+        "targets": [],
+        "files": [{"path": ".criterion/requirements/REQ-000001-invoices.md"}],
+    }
+    second = FakeCriterion(tmp_path, views=(REQ, RULE, BUG, added), journal=(moved,))
+    staged = stage(kb, tmp_path / "2", projects, catalyst=lambda _: second, host=hosts, previous=tmp_path / "1")
+    # the moved requirement, the rule it cites (its back-references changed) and the new bug; the old bug carried
+    assert second.viewed == sorted([REQ["id"], RULE["id"], added["id"]])
+    assert [
+        "journal",
+        "show",
+        "--since",
+        json.loads((tmp_path / "1" / "read.json").read_text())["read_at"],
+        "--json",
+    ] in second.calls
+    assert staged.sources[0].carried == 1 and staged.documents == 4
+    carried = tmp_path / "2" / "docs/criteria/app/bug/BUG-000001-Ab3xR9pQ.md"
+    assert carried.read_text() == (tmp_path / "1" / "docs/criteria/app/bug/BUG-000001-Ab3xR9pQ.md").read_text()
+
+    third = FakeCriterion(tmp_path, views=(REQ, RULE))  # the bugs are gone from the criterion
+    stage(kb, tmp_path / "3", projects, catalyst=lambda _: third, host=hosts, previous=tmp_path / "2")
+    assert not list((tmp_path / "3" / "docs/criteria/app").glob("bug/*.md"))
+
+
+def test_a_source_whose_visibility_changed_is_read_in_full(tmp_path: Path, projects: Projects):
+    first = FakeCriterion(tmp_path, views=(REQ, RULE, BUG))
+    stage(_kb(("KSOURCE-2", CRITERION)), tmp_path / "1", projects, catalyst=lambda _: first, host=HOSTS)
+    public = CRITERION.model_copy(update={"visibility": Visibility.PUBLIC})
+    second = FakeCriterion(tmp_path, views=(REQ, RULE, BUG))
+    hosts = _hosts(**{"acme/app-criterion": Visibility.PUBLIC})
+    stage(_kb(("KSOURCE-2", public)), tmp_path / "2", projects, catalyst=lambda _: second, host=hosts,
+          previous=tmp_path / "1")  # fmt: skip
+    assert second.viewed == first.viewed and not any(c[0] == "journal" for c in second.calls)
+
+
+def test_a_previous_read_of_another_knowledge_base_is_refused(tmp_path: Path, projects: Projects):
+    stage(_kb(), tmp_path / "1", projects, host=HOSTS)
+    other = KnowledgeBase("KB-000009-Ab3xR9pQ", Classification.PUBLIC, Classification.INTERNAL, [])
+    with pytest.raises(SourceError, match="not KB-000009"):
+        stage(other, tmp_path / "2", projects, host=HOSTS, previous=tmp_path / "1")

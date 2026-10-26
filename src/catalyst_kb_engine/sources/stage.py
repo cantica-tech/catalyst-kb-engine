@@ -2,13 +2,16 @@
 `<out>/docs/<criteria|repositories>/<name>/` with its front matter, in the layout the builds read, so a build of
 `<out>` is a build of the sources. A private source's documents are at least `Internal`; with `public_only`, a
 private source is never opened. `<out>` holds private data whenever a private source was read: keep it out of any
-public repository."""
+public repository. `<out>/read.json` says when and how each source was read, so the next read can be incremental
+(`eng-SOURCE-000003`): given it as `previous`, a criterion whose source is unchanged re-views only what moved."""
 
 from __future__ import annotations
 
+import json
 import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -41,6 +44,8 @@ class SourceRead:
     """Why nothing was read from it, when nothing was."""
     unviewable: int = 0
     """Items its criterion lists but cannot show (`CriterionRead.unviewable`): left out."""
+    carried: int = 0
+    """Documents an incremental read carried over from the previous read, unviewed."""
 
     def mark(self, own: Classification | None, base: Classification, floor: Classification) -> str:
         """A document's classification, counted: its own mark or its source's, never below the floor."""
@@ -96,12 +101,17 @@ def stage(
     catalyst: Callable[[Path], CatalystCLI] = CatalystCLI,
     host: Host = github_visibility,
     workers: int = 8,
+    previous: Path | None = None,
 ) -> Staged:
     """Read every source of `kb` into `out` (new or empty). Every source's visibility is resolved before any is read,
-    so a disagreement stops the whole read (`eng-SOURCE-000002`)."""
+    so a disagreement stops the whole read (`eng-SOURCE-000002`). With `previous` (an earlier staging directory of
+    the same knowledge base), each unchanged criterion source is read incrementally (`eng-SOURCE-000003`)."""
     refuse_written(out)
+    read_at = datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
+    before = _previous_read(previous, kb.id)
     visibilities = {sid: resolve_visibility(sid, source, projects, host) for sid, source in kb.sources}
     report = []
+    reads: dict[str, dict[str, Any]] = {}
     for sid, source in kb.sources:
         read = SourceRead(sid, source.title, visibilities[sid])
         report.append(read)
@@ -114,11 +124,24 @@ def stage(
             floor = Classification.highest(floor, PRIVATE_FLOOR)
 
         kind = source.kind
+        how = {"kind": kind.value if kind else None, "location": source.location, "visibility": visibilities[sid].value,
+               "classification": base.value, "floor": floor.value}  # fmt: skip
+        reads[sid] = {**how, "read_at": read_at}
         if kind is SourceKind.CRITERION:
             name = source.project or ""
             cli = catalyst(projects.find(name, catalyst=True))
-            criterion = read_criterion(cli, name, workers=workers)
+            then = (before or {}).get(sid) or {}
+            since = then.get("read_at") if {k: then.get(k) for k in how} == how else None
+            old = (previous or out) / "docs" / "criteria" / name  # nothing is carried without a previous read
+            have = frozenset(f.relative_to(old).as_posix() for f in old.rglob("*.md")) if since else frozenset()
+            criterion = read_criterion(cli, name, workers=workers, since=since, have=have)
             read.unviewable = len(criterion.unviewable)
+            for path in criterion.carried:
+                text = (old / path).read_text(encoding="utf-8")
+                meta, body = _split(text, old / path)
+                read.mark(Classification(meta["classification"]), base, floor)
+                read.carried += 1
+                _write(out, f"criteria/{name}/{path}", meta, body)
             for doc in criterion.documents:
                 meta = {
                     "title": f"{doc.id} {doc.title}",
@@ -149,7 +172,21 @@ def stage(
                 _write(out, f"repositories/{name}/{_staged_path(rel)}", meta, body)
         else:
             read.skipped = f"not read: a {kind.value if kind else 'source'} at {source.location} is not supported yet"
+            del reads[sid]
+    record = {"knowledge_base": kb.id, "read_at": read_at, "sources": reads}
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "read.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
     return Staged(out, report)
+
+
+def _previous_read(previous: Path | None, kb: str) -> dict[str, dict[str, Any]] | None:
+    """The sources an earlier staging directory read, and how; refused if it was another knowledge base's."""
+    if previous is None:
+        return None
+    record = json.loads((previous / "read.json").read_text(encoding="utf-8"))
+    if record.get("knowledge_base") != kb:
+        raise SourceError(f"{previous} was read for {record.get('knowledge_base')}, not {kb}")
+    return record.get("sources") or {}
 
 
 def summary(staged: Staged) -> dict[str, Any]:
@@ -166,6 +203,7 @@ def summary(staged: Staged) -> dict[str, Any]:
                 "classification": s.by_classification,
                 **({"skipped": s.skipped} if s.skipped else {}),
                 **({"unviewable": s.unviewable} if s.unviewable else {}),
+                **({"carried": s.carried} if s.carried else {}),
             }
             for s in staged.sources
         ],

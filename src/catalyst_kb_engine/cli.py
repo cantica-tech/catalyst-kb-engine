@@ -95,6 +95,7 @@ def _read_sources(args: argparse.Namespace) -> int:
         public_only=args.public_only,
         catalyst=lambda project: CatalystCLI(project, command=cli.command),
         workers=args.workers,
+        previous=Path(args.previous) if args.previous else None,
     )
     print(json.dumps(summary(staged), indent=2))
     return 0
@@ -170,7 +171,8 @@ def _build_vectors(args: argparse.Namespace) -> int:
     policy = EmbeddingPolicy(hosted_up_to=up_to, hosted=hosted or None, local=local or None)
     result = asyncio.run(
         build_vectors(Path(args.repository), Path(args.out), info, policy, max_tokens=args.max_tokens,
-                      overlap=args.overlap)
+                      overlap=args.overlap, embedding_input=args.embed_input, document_prefix=args.document_prefix,
+                      query_prefix=args.query_prefix, previous=Path(args.previous) if args.previous else None)
     )  # fmt: skip
     summary = {
         "out": str(result.out),
@@ -180,6 +182,7 @@ def _build_vectors(args: argparse.Namespace) -> int:
         "chunks": result.chunks,
         "left_out": result.left_out,
         "embedding": result.embedding,
+        **({"incremental": result.incremental} if result.incremental is not None else {}),
     }
     if args.record:
         location = args.location or str(Path(args.out).resolve())
@@ -215,6 +218,7 @@ def _parser() -> argparse.ArgumentParser:
     r.add_argument("--project", action="append", help="<name>=<dir>: a checkout elsewhere (repeatable)")
     r.add_argument("--public-only", action="store_true", help="open public sources only (for a public build)")
     r.add_argument("--workers", type=int, default=8, help="parallel catalyst calls per criterion")
+    r.add_argument("--previous", help="an earlier staging directory: re-view only what the journal says moved")
     b = sub.add_parser("build-folders", help="write a folders build of a knowledge base repository")
     b.add_argument("repository", help="the knowledge base repository (docs/, pointers/)")
     b.add_argument("out", help="the build's directory, new or empty")
@@ -241,6 +245,11 @@ def _parser() -> argparse.ArgumentParser:
     v.add_argument(
         "--hosted-model", help="a hosted one, used only within --hosted-up-to, e.g. openai:text-embedding-3-small"
     )
+    v.add_argument("--embed-input", choices=["context", "text"], default="context",
+                   help="what each chunk is embedded as: its title and heading before its text (default), or its text")  # fmt: skip
+    v.add_argument("--document-prefix", default="", help="before each chunk, e.g. 'search_document: ' for nomic")
+    v.add_argument("--query-prefix", default="", help="recorded for searches, e.g. 'search_query: ' for nomic")
+    v.add_argument("--previous", help="a previous vector build: reuse every vector whose exact input is unchanged")
     v.add_argument("--max-tokens", type=int, default=512)
     v.add_argument("--overlap", type=int, default=64)
     v.add_argument("--build", help="the KBUILD- ID, once recorded")

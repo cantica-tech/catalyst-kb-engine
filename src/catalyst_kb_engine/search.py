@@ -99,6 +99,11 @@ class BuildIndex:
     def model(self) -> str:
         return str(self.manifest.get("embedding", {}).get("model") or "")
 
+    @property
+    def query_prefix(self) -> str:
+        """What the build's model expects before a question (`eng-OUTPUT-000003`); none for an older build."""
+        return str(self.manifest.get("embedding", {}).get("query_prefix") or "")
+
     def keyword(self, question: str, n: int = CANDIDATES) -> list[tuple[int, float]]:
         query = fts_query(question)
         if not query:
@@ -111,7 +116,7 @@ class BuildIndex:
     async def vector(self, question: str, embed: Embed, n: int = CANDIDATES) -> list[tuple[int, float]]:
         import numpy as np
 
-        query = np.asarray(await embed(question), dtype=np.float32)
+        query = np.asarray(await embed(self.query_prefix + question), dtype=np.float32)
         if query.shape != (self.vectors.shape[1],):
             raise BuildError(
                 f"the question's vector has {query.shape[0]} dimensions, the build's {self.vectors.shape[1]}"
