@@ -29,6 +29,9 @@ catalyst-kb-engine build-vectors <kb repo> builds/1.0.0 --kb KB-… --version 1.
 catalyst-kb-engine search "who approves an invoice?" --build builds/1.0.0 [-k 8] [--mode hybrid|keyword|vector]
 catalyst-kb-engine mcp --build builds/1.0.0                                             # the same, as an MCP tool
 catalyst-kb-engine evaluate questions.yaml --build builds/1.0.0 [--record KBUILD-…]     # score it
+catalyst-kb-engine export-sources KB-… site/sources.json --projects-dir ~/sources         # its public sources only
+catalyst-kb-engine publish-check builds/public --sources site/sources.json               # nothing private in it
+catalyst-kb-engine site builds/public _pages --title "…" --intro "…"                      # the site's pages
 ```
 
 Records go through catalyst's CLI (`CATALYST_CLI`, else `catalyst`), in the project (`--project-root`). A vector
@@ -63,6 +66,13 @@ for an agent on the machine that keeps the build. `evaluate` runs an evaluation 
 recall at k and mean reciprocal rank, and names only the missed questions' IDs. `--record` writes the score into the
 build's `KBUILD-` `Verification`. An evaluation set drawn from private sources is private: keep it in the knowledge
 base's criterion.
+
+A public site is published from a public build. `export-sources` writes a knowledge base's public sources list:
+each source's visibility is confirmed on GitHub, and a private one is never written. `read-sources --sources <list>`
+reads from that list where the criterion is not available, such as a publishing service's runner. `publish-check`
+refuses a build holding any document whose source the list does not name, or that is not `Public`. `site` makes the
+pages: the knowledge base's own pages (`docs/guide/`) as written, and one reference page per document citing its file.
+catalyst-docs builds its site this way in GitHub Actions and deploys it to Pages, with no branch keeping it.
 
 ## Development
 
