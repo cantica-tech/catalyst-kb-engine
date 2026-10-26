@@ -22,6 +22,7 @@ from typing import Any
 
 import yaml
 
+from catalyst_kb_engine.ignore import Ignored
 from catalyst_kb_engine.models import Classification
 
 FORMAT = "kbm-build/1"
@@ -85,12 +86,16 @@ def _classification(value: Any, where: Path) -> Classification | None:
         raise BuildError(f"{where}: unknown classification {value!r}") from None
 
 
-def _read(repo: Path, folder: str, info: BuildInfo, pointer: bool) -> tuple[list[_Entry], list[Path], int]:
+def _read(
+    repo: Path, folder: str, info: BuildInfo, pointer: bool, ignored: Ignored
+) -> tuple[list[_Entry], list[Path], int]:
     entries, unmarked, broken = [], [], 0
     root = repo / folder
     for file in sorted(root.rglob("*.md")) if root.is_dir() else ():
         if file.name == "README.md":
             continue  # a level's description; the build's index replaces them
+        if ignored(file.relative_to(repo).as_posix()):
+            continue  # opted out of catalyst, so not part of the knowledge base (`eng-SOURCE-000004`)
         meta, body = _split(file.read_text(encoding="utf-8"), file)
         own = _classification(meta.get("classification"), file)
         if own is None:
@@ -133,8 +138,9 @@ class Selection:
 
 def select(repo: Path, info: BuildInfo) -> Selection:
     """The documents and pointers a build takes; refuses unmarked ones (KBM INV-KB-4) and a floor above the ceiling."""
-    documents, unmarked, _ = _read(repo, "docs", info, pointer=False)
-    pointers, unmarked_pointers, broken = _read(repo, "pointers", info, pointer=True)
+    ignored = Ignored(repo)
+    documents, unmarked, _ = _read(repo, "docs", info, pointer=False, ignored=ignored)
+    pointers, unmarked_pointers, broken = _read(repo, "pointers", info, pointer=True, ignored=ignored)
     if unmarked or unmarked_pointers:
         listed = ", ".join(str(p) for p in [*unmarked, *unmarked_pointers])
         raise BuildError(f"unmarked, so nothing is built: {listed}")

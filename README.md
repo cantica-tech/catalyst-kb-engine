@@ -44,6 +44,9 @@ document from a private source is at least `Internal`, and `--public-only` never
 directory holds private data whenever a private source was read: keep it out of any public repository. Checkouts are
 found as `<--projects-dir>/<name>`, or given with `--project <name>=<dir>`; `gh` must be logged in.
 
+What a `.catalystignore` opts out of catalyst (catalyst's `FORMAT.md` §11) is never part of a knowledge base: the
+builds skip it in the knowledge base repository, and `read-sources` skips it in a repository source.
+
 Builds can be incremental. `read-sources --previous <staging>` re-views, in each criterion whose source is unchanged,
 only the entities a journal entry since the previous read names or touched, the new ones, and what they cite. Every
 other document is carried over; repositories are always re-read. `build-vectors --previous <build>` reuses a chunk's
