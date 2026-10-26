@@ -13,7 +13,7 @@ shipped KBM 0.6.0 and 0.6.1, and phases 0 to 3.
 | 1     | **done**: catalyst-kb-engine 0.4.0, `read-sources`             | `REQ-000004-7TE7wuaB` (the engine's criterion)              |
 | 2     | **done**: catalyst-kb-engine 0.5.0, `search`, `mcp`, `evaluate` | `REQ-000005-7TE7wuaB`; catalyst-docs' `KBUILD-000001-erFhHt6m` |
 | 3     | **done**: catalyst-kb-engine 0.6.0, `--previous` reads and builds | `REQ-000006-7TE7wuaB`, `REQ-000007-7TE7wuaB`; `KBUILD-000003-erFhHt6m` |
-| 4     | next: the guide's outline, for the owner to approve           | none yet                                                   |
+| 4     | outline approved; pages 1–3 drafted, waiting for the owner's review | catalyst-docs' `GUIDE-OUTLINE.md`; `docs/guide/` (uncommitted) |
 | 5–6   | not started                                                  | none yet                                                   |
 
 ## What exists
@@ -67,12 +67,16 @@ shipped KBM 0.6.0 and 0.6.1, and phases 0 to 3.
 
 ## The exact next step
 
-Phase 4: the guide's outline (design 01 §5.3), drafted with the realm search and written for the public. A public
-guide page cites only public reference pages. The outline is the owner's to approve before any page is written.
+Phase 4: the owner reviews pages 1 to 3 in catalyst-docs' `docs/guide/` (uncommitted). Commit them once approved, then
+draft pages 4 to 12 in batches, from public documents only. Each page carries front matter (`title`,
+`classification: Public`) and no body `#` heading. Several public documents are stale: catalyst's `README.md`,
+`GLOSSARY.md` and `beta/QUICKSTART.md` still describe `.criterion/` in the project and a `<name>.catalyst` pointer.
+The guide follows the current kernel (`CLI.md`, `INSTANTIATION-GUIDE.md`).
 
 ## Open for the owner
 
-- **catalyst-docs' uncommitted files** (`KB.md`, `docs/user-generated/project-map.md`) are another session's, waiting
-  on the owner's commit ask. The same goes for the catalyst-docs criterion's unshared entries (the two retirements and
-  the Policy edit). The realm build's record and the evaluation set are unshared there too: a `share push` would
-  publish all of them together, so it waits for the owner.
+- **Pages 1 to 3** of the guide, for review.
+- **`docs/user-generated/project-map.md`** has no `classification`, so every build of catalyst-docs refuses to run.
+  Its content is public-safe: propose `Public` to the owner, the curator.
+- catalyst-docs' `development` has another session's commit (a project map; `KB.md` updated), not yet merged to
+  `main`.

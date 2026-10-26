@@ -310,3 +310,38 @@ def test_a_previous_read_of_another_knowledge_base_is_refused(tmp_path: Path, pr
     other = KnowledgeBase("KB-000009-Ab3xR9pQ", Classification.PUBLIC, Classification.INTERNAL, [])
     with pytest.raises(SourceError, match="not KB-000009"):
         stage(other, tmp_path / "2", projects, host=HOSTS, previous=tmp_path / "1")
+
+
+ROW = {
+    "id": "RM-000001-Ab3xR9pQ", "type": "RM", "title": "Public beta", "file": "development/roadmaps/beta.md",
+    "line": 12, "row": True, "text": "| RM-000001-Ab3xR9pQ | Public beta | Planned | 2026-11-01 |",
+    "fields": {"ID": "RM-000001-Ab3xR9pQ", "Item": "Public beta", "Status": "Planned", "Due": "2026-11-01", "Linked": ""},
+    "status": "Planned", "links": {}, "linked_from": [],
+    "journal": [
+        {"timestamp": "2026-10-20T10:00:00Z", "actor": "ada", "command": "/roadmap", "action": "update",
+         "intent": "the beta's date set"},
+        {"timestamp": None, "actor": None, "command": None, "action": None, "intent": None},
+    ],
+}  # fmt: skip
+
+
+def test_a_table_row_becomes_a_document_of_its_cells():
+    doc = render(ROW, "app")
+    assert (doc.id, doc.type, doc.status, doc.updated, doc.path) == (
+        "RM-000001-Ab3xR9pQ", "RM", "Planned", "2026-10-20", "rm/RM-000001-Ab3xR9pQ.md",
+    )  # fmt: skip
+    assert "A row of `development/roadmaps/beta.md`." in doc.body
+    assert "| Due | 2026-11-01 |" in doc.body and "| Linked |" not in doc.body
+    assert "`/roadmap` update: the beta's date set" in doc.body  # a string intent, whole
+
+
+def test_a_kernel_that_lists_a_row_with_its_file_has_it_viewed(tmp_path: Path):
+    class WithRows(FakeCriterion):
+        def run(self, *args: str) -> str:
+            if args[:2] == ("list", "all"):
+                listed = [{"id": i, "type": v["type"], "file": v["file"]} for i, v in self.views.items()]
+                return json.dumps(listed)
+            return super().run(*args)
+
+    read = read_criterion(WithRows(tmp_path, views=(REQ, ROW)), "app")
+    assert [d.id for d in read.documents] == ["REQ-000001-Ab3xR9pQ", "RM-000001-Ab3xR9pQ"] and read.unviewable == []
