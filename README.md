@@ -15,7 +15,7 @@ Status: in development. The design and the technology research behind it are in 
 ## Using it
 
 ```sh
-uv tool install "catalyst-kb-engine[vectors,openai,search,mcp]"   # search: numpy; mcp: the MCP server
+uv tool install "catalyst-kb-engine[vectors,openai,search,mcp,serve]"   # search: numpy; mcp, serve: the servers
 
 catalyst-kb-engine onboard "Support KB" --project app --other-module software-engineering   # you decide each step
 catalyst-kb-engine onboard "Support KB" … --record --serves <rule IDs> --classification Internal
@@ -28,6 +28,7 @@ catalyst-kb-engine build-vectors <kb repo> builds/1.0.0 --kb KB-… --version 1.
     [--previous builds/0.9.0]
 catalyst-kb-engine search "who approves an invoice?" --build builds/1.0.0 [-k 8] [--mode hybrid|keyword|vector]
 catalyst-kb-engine mcp --build builds/1.0.0                                             # the same, as an MCP tool
+catalyst-kb-engine serve --build builds/1.0.0 [--port 8765]                            # over HTTP, to the realm only
 catalyst-kb-engine evaluate questions.yaml --build builds/1.0.0 [--record KBUILD-…]     # score it
 catalyst-kb-engine export-sources KB-… site/sources.json --projects-dir ~/sources         # its public sources only
 catalyst-kb-engine publish-check builds/public --sources site/sources.json               # nothing private in it
@@ -73,6 +74,13 @@ reads from that list where the criterion is not available, such as a publishing 
 refuses a build holding any document whose source the list does not name, or that is not `Public`. `site` makes the
 pages: the knowledge base's own pages (`docs/guide/`) as written, and one reference page per document citing its file.
 catalyst-docs builds its site this way in GitHub Actions and deploys it to Pages, with no branch keeping it.
+
+`serve` answers `GET /search?q=&k=&mode=` (and `GET /me`) only to a bearer token the realm's provider vouches for,
+through catalyst-users' FastAPI integration: active introspection, the realm's issuer, the `catalyst-api` audience. Any
+other token is refused (401), and a provider out of reach refuses too (503). Its settings are catalyst-users'
+environment (`CATALYST_USERS_SERVER`, `CATALYST_USERS_REALM`, `CATALYST_USERS_API_CLIENT_SECRET`, …); it never logs or
+returns a token or a secret, serves no API description, and listens on this machine only unless `--host` says
+otherwise.
 
 ## Development
 

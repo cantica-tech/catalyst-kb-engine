@@ -2,7 +2,8 @@
 the criterion); `read-sources` reads a knowledge base's sources into a private staging directory a build can read;
 `build-folders` writes a folders build (`--record` records it); `search` searches a vector build, `mcp` serves that
 search as an MCP tool, `evaluate` scores it against an evaluation set (`--record` keeps the score with the build);
-`export-sources`, `publish-check` and `site` publish a public build; `plan` reads a recorded knowledge base back. Records go through catalyst's CLI (`CATALYST_CLI`, else `catalyst`). Exit codes: 0 done, 1 refused or failed,
+`export-sources`, `publish-check` and `site` publish a public build; `serve` serves the search to the realm, behind
+catalyst-users; `plan` reads a recorded knowledge base back. Records go through catalyst's CLI (`CATALYST_CLI`, else `catalyst`). Exit codes: 0 done, 1 refused or failed,
 2 usage."""
 
 from __future__ import annotations
@@ -150,6 +151,13 @@ def _mcp(args: argparse.Namespace) -> int:
     from catalyst_kb_engine.mcp_server import serve
 
     serve(Path(args.build))
+    return 0
+
+
+def _serve(args: argparse.Namespace) -> int:
+    from catalyst_kb_engine.serve import serve
+
+    serve(Path(args.build), args.host, args.port)
     return 0
 
 
@@ -316,6 +324,10 @@ def _parser() -> argparse.ArgumentParser:
     s.add_argument("--json", action="store_true", help="the passages as JSON")
     m = sub.add_parser("mcp", help="serve a vector build's search as an MCP tool, over stdio")
     m.add_argument("--build", required=True, help="the vector database build's directory")
+    sv = sub.add_parser("serve", help="serve a vector build's search over HTTP, to the realm only (catalyst-users)")
+    sv.add_argument("--build", required=True, help="the vector database build's directory")
+    sv.add_argument("--host", default="127.0.0.1", help="the address to listen on (default: this machine only)")
+    sv.add_argument("--port", type=int, default=8765)
     e = sub.add_parser("evaluate", help="score a vector build's search against an evaluation set")
     e.add_argument("questions", help="the evaluation set (YAML: questions, each id, question, expect)")
     e.add_argument("--build", required=True, help="the vector database build's directory")
@@ -346,6 +358,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "build-vectors": _build_vectors,
             "search": _search,
             "mcp": _mcp,
+            "serve": _serve,
             "evaluate": _evaluate,
             "plan": _plan,
         }[args.command](args)

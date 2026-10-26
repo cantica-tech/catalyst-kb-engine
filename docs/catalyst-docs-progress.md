@@ -15,7 +15,7 @@ shipped KBM 0.6.0 and 0.6.1, and phases 0 to 5.
 | 3     | **done**: catalyst-kb-engine 0.6.0, `--previous` reads and builds | `REQ-000006-7TE7wuaB`, `REQ-000007-7TE7wuaB`; `KBUILD-000003-erFhHt6m` |
 | 4     | **done**: the guide's twelve pages, each approved by the owner  | catalyst-docs' `GUIDE-OUTLINE.md`, `docs/guide/`            |
 | 5     | **done**: the public site, live, built by Actions (engine 0.8.0) | `REQ-000009-7TE7wuaB`; catalyst-docs' `pages.yml`           |
-| 6     | **in progress**: `serve` written, tests and live check to do   | `REQ-000010-7TE7wuaB`, `STEP-000015-7TE7wuaB`                |
+| 6     | **built** (engine 0.9.0); the live check waits for the owner     | `REQ-000010-7TE7wuaB` (Active), `STEP-000015-7TE7wuaB`        |
 
 ## What exists
 
@@ -68,30 +68,19 @@ shipped KBM 0.6.0 and 0.6.1, and phases 0 to 5.
 
 ## The exact next step
 
-Phase 6, the last of design 01: the realm's search served behind catalyst-users, so a token from outside the realm is
-refused (`eng-SEARCH-000003-7TE7wuaB`, `REQ-000010-7TE7wuaB`, `STEP-000015-7TE7wuaB`). On `development`, uncommitted
-but journaled:
+Phase 6's live check, the last step of design 01, with the owner. catalyst-kb-engine 0.9.0's `serve` is built and
+tested offline (`tests/test_serve.py`, with catalyst-users' own token checks). The live check needs the local realm's
+`catalyst-api` secret, which only the owner supplies:
 
-- `src/catalyst_kb_engine/serve.py`: a FastAPI app, `GET /search?q=&k=&mode=` and `GET /me`, both behind catalyst-users'
-  `KeycloakAuth` (active introspection, the realm's issuer, the `catalyst-api` audience; 401, 403, 503). Settings come
-  from `CATALYST_USERS_*` only. The module has no `from __future__ import annotations`, on purpose: FastAPI resolves
-  the annotations, and `Identity` and `realm` exist only inside `app()`.
-- `cli.py`: `catalyst-kb-engine serve --build <dir> [--host 127.0.0.1] [--port 8765]`.
-- `pyproject.toml`: the `serve` extra (catalyst-users 0.7.0 from git, FastAPI, uvicorn); catalyst-users and httpx in the
-  dev group. ruff and pyright are clean.
+```sh
+export CATALYST_USERS_SERVER=http://localhost:8080 CATALYST_USERS_API_CLIENT_SECRET=…   # the owner's
+catalyst-kb-engine serve --build ~/.catalyst/projects/catalyst-docs/realm/builds/0.2.1 &
+curl -s -H "Authorization: Bearer $(catalyst-users token --system)" localhost:8765/me      # the realm: 200
+curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer <a token from another realm>" localhost:8765/me  # 401
+```
 
-To do, in order:
-
-1. **Offline tests** (`tests/test_serve.py`): build `KeycloakAuth(oidc=…)` from catalyst-users' real `OIDCClient`
-   (`Settings(server_url=…, api_client_secret="test")`) with only `introspect` replaced, so its own `accepts` decides.
-   Cover no token, an inactive token, another realm's issuer (`iss` of another realm: the done-when), another
-   audience, an expired one (401); `introspect` raising `ProviderUnavailableError` (503); a realm token (200, passages,
-   using the hand-made build of `tests/test_search.py` and its `axis_embed`). Use FastAPI's `TestClient`.
-2. README, rule to ✅, step and requirement closed, version 0.9.0, release, share the criterion.
-3. **The live check, with the owner**: the service needs the `catalyst-api` client's secret, which Keycloak generated
-   for the local realm. Reading it was refused as credential exploration, rightly: the owner supplies it
-   (`CATALYST_USERS_API_CLIENT_SECRET`) when running the service. Then a realm token (`catalyst-users token --system`)
-   answers 200 on `/me`, and a token from outside the realm is refused 401.
+Use the same host (`localhost` or `127.0.0.1`) for the token and the service: Keycloak builds its issuer from it. Then
+`REQ-000010-7TE7wuaB` completes, and design 01 is done.
 
 ## Open for the owner
 
