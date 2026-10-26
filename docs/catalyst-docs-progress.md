@@ -2,7 +2,7 @@
 
 The handoff log of the catalyst-docs lead. Read it with [`catalyst-docs-lead.md`](catalyst-docs-lead.md) (the brief)
 and [`design/01-catalyst-docs.md`](design/01-catalyst-docs.md) (the design). The second lead session (2026-10-25)
-shipped KBM 0.6.0 and phases 0 to 2.
+shipped KBM 0.6.0 and 0.6.1, and phases 0 to 3.
 
 ## State of each phase
 
@@ -12,8 +12,9 @@ shipped KBM 0.6.0 and phases 0 to 2.
 | 0     | **done**: both repositories, `KB-000002-erFhHt6m` `Active`      | the catalyst-docs criterion                                |
 | 1     | **done**: catalyst-kb-engine 0.4.0, `read-sources`             | `REQ-000004-7TE7wuaB` (the engine's criterion)              |
 | 2     | **done**: catalyst-kb-engine 0.5.0, `search`, `mcp`, `evaluate` | `REQ-000005-7TE7wuaB`; catalyst-docs' `KBUILD-000001-erFhHt6m` |
-| 3     | next                                                         | none yet                                                   |
-| 4–6   | not started                                                  | none yet                                                   |
+| 3     | **done**: catalyst-kb-engine 0.6.0, `--previous` reads and builds | `REQ-000006-7TE7wuaB`, `REQ-000007-7TE7wuaB`; `KBUILD-000003-erFhHt6m` |
+| 4     | next: the guide's outline, for the owner to approve           | none yet                                                   |
+| 5–6   | not started                                                  | none yet                                                   |
 
 ## What exists
 
@@ -29,11 +30,12 @@ shipped KBM 0.6.0 and phases 0 to 2.
   catalyst, catalyst-users, catalyst-ui, catalyst-knowledge-base and catalyst-kb-engine. `000008` and `000014` are
   retired, since catalyst-users-kb was deleted at the owner's request.
 - **The engine's `read-sources`** stages a knowledge base's live sources in the `docs/` layout the builds read.
-- **The realm build 0.1.0** (`KBUILD-000001-erFhHt6m`, `Built`): 913 documents, 6,791 chunks, `nomic-embed-text`
-  local, in `~/.catalyst/projects/catalyst-docs/realm/builds/0.1.0`. `realm/run-0.1.0.sh` there rebuilds it.
+- **The realm build 0.2.1** (`KBUILD-000003-erFhHt6m`, `Built`; 0.1.0 and 0.2.0 superseded): 931 documents, 6,925
+  chunks, `nomic-embed-text` local, each chunk embedded with its title and heading and the model's prefixes. It is in
+  `~/.catalyst/projects/catalyst-docs/realm/builds/0.2.1`, staged from `realm/sources/0.2.1` (with `read.json`).
 - **The evaluation set**: 52 questions in the catalyst-docs criterion,
-  `knowledge-bases/evaluations/KB-000002-erFhHt6m.yaml`. The first score at k 10: hybrid recall 0.712 (MRR 0.389),
-  keyword 0.673, vector 0.635.
+  `knowledge-bases/evaluations/KB-000002-erFhHt6m.yaml`. Scores at k 10 (hybrid recall, MRR): 0.1.0, 0.712, 0.389;
+  with title and heading, 0.750, 0.507; with the prefixes too (0.2.1), 0.769, 0.500.
 
 ## Decided by the owner (2026-10-25)
 
@@ -55,21 +57,18 @@ shipped KBM 0.6.0 and phases 0 to 2.
 - **The realm build's home**: private local storage, outside any repository, for example
   `~/.catalyst/projects/catalyst-docs/realm/`. That is beside the criterion, never in it, since the criterion is
   shared through git.
-- **Raising the score**, two candidates, each needing a rebuild:
-  - embed each chunk with its document's title and heading, not its text alone, since short rules lose their title;
-  - use `nomic-embed-text`'s task prefixes (`search_document:`, `search_query:`), recorded in the manifest.
-
-  Measure each against the evaluation set before keeping it.
-- **A vector build of the realm takes about 25 minutes** on this machine's CPU. Incremental builds (phase 3) re-embed
-  only changed documents.
+- **Rebuilding the realm** is now cheap. Run `read-sources --previous <last staging>` (18 seconds), then
+  `build-vectors --previous <last build>` with `--embed-input context --document-prefix "search_document: "
+  --query-prefix "search_query: "` (seconds when little changed). A full vector build takes about 46 minutes.
+- **What still misses**: 12 of 52 questions in hybrid mode. Keyword search is unchanged at 0.673, so better keyword
+  ranking (for example weighting titles) is the next lever. Measure it the same way.
 - **Extras**: `search` (numpy, pyarrow) and `mcp` (mcp 2.x, where `FastMCP` is now `MCPServer`).
 - **Local models**: Ollama runs `nomic-embed-text`, `llama3.2:3b` and `codestral`.
 
 ## The exact next step
 
-Phase 3: incremental builds. A rebuild after one change reprocesses only that change. Reuse each unchanged
-document's chunks and vectors by its content hash; re-view only the entities whose journal moved. The manifest says
-which were reused. Open a `REQ-` in the engine's criterion first.
+Phase 4: the guide's outline (design 01 §5.3), drafted with the realm search and written for the public. A public
+guide page cites only public reference pages. The outline is the owner's to approve before any page is written.
 
 ## Open for the owner
 

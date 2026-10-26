@@ -157,3 +157,47 @@ def test_the_mcp_tool_answers_as_the_command_does(build: Path):
     result = asyncio.run(app.call_tool("search", {"question": "who approves an invoice", "mode": "keyword", "k": 1}))
     text = "".join(getattr(c, "text", "") for c in getattr(result, "content", []))
     assert "REQ-000001-Ab3xR9pQ" in text and "criterion app" in text
+
+
+def test_a_build_records_and_embeds_its_input_and_prefixes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    from pydantic_ai.embeddings import TestEmbeddingModel
+
+    from catalyst_kb_engine.build import vectors
+
+    embedded: list[str] = []
+
+    async def capture(model, texts):
+        embedded.extend(texts)
+        return [[1.0, 0.0] for _ in texts]
+
+    monkeypatch.setattr(vectors, "_embed", capture)
+    repo = tmp_path / "kb"
+    (repo / "docs").mkdir(parents=True)
+    (repo / "docs" / "rule.md").write_text(
+        "---\ntitle: Assent before push\nclassification: Public\n---\n\nAsk first.\n"
+    )
+    info = BuildInfo("KB-000001-Ab3xR9pQ", "1.0.0", Classification.PUBLIC, Classification.PUBLIC)
+    local = EmbeddingModel(TestEmbeddingModel(dimensions=2), "local-test", "local")
+    policy = EmbeddingPolicy("Local only", local=local)
+    asyncio.run(build_vectors(repo, tmp_path / "out", info, policy, document_prefix="doc: ", query_prefix="q: "))
+    assert embedded == ["doc: Assent before push\n\nAsk first."]
+    manifest = json.loads((tmp_path / "out" / "manifest.json").read_text())
+    recorded = {k: manifest["embedding"][k] for k in ("input", "document_prefix", "query_prefix")}
+    assert recorded == {"input": "context", "document_prefix": "doc: ", "query_prefix": "q: "}
+    embedded.clear()
+    asyncio.run(build_vectors(repo, tmp_path / "plain", info, policy, embedding_input="text"))
+    assert embedded == ["Ask first."]
+
+
+def test_a_search_embeds_the_question_with_the_builds_query_prefix(build: Path):
+    manifest = json.loads((build / "manifest.json").read_text())
+    manifest["embedding"]["query_prefix"] = "search_query: "
+    (build / "manifest.json").write_text(json.dumps(manifest))
+    asked: list[str] = []
+
+    async def record(question: str) -> list[float]:
+        asked.append(question)
+        return await axis_embed(question)
+
+    asyncio.run(BuildIndex(build).search("invoice", mode=Mode.VECTOR, embed=record))
+    assert asked == ["search_query: invoice"]

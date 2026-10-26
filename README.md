@@ -20,10 +20,12 @@ uv tool install "catalyst-kb-engine[vectors,openai,search,mcp]"   # search: nump
 catalyst-kb-engine onboard "Support KB" --project app --other-module software-engineering   # you decide each step
 catalyst-kb-engine onboard "Support KB" … --record --serves <rule IDs> --classification Internal
 catalyst-kb-engine plan KB-000001-…                                                     # read it back
-catalyst-kb-engine read-sources KB-… <staging dir> --projects-dir ~/sources [--public-only]   # its sources, staged
+catalyst-kb-engine read-sources KB-… <staging dir> --projects-dir ~/sources [--public-only] [--previous <staging>]
 catalyst-kb-engine build-folders <kb repo> builds/1.0.0 --kb KB-… --version 1.0.0 --floor Internal --record
 catalyst-kb-engine build-vectors <kb repo> builds/1.0.0 --kb KB-… --version 1.0.0 --floor Internal \
-    --local-model ollama:nomic-embed-text [--hosted-model openai:text-embedding-3-small --hosted-up-to Internal]
+    --local-model ollama:nomic-embed-text [--hosted-model openai:text-embedding-3-small --hosted-up-to Internal] \
+    [--embed-input context|text] [--document-prefix "search_document: " --query-prefix "search_query: "] \
+    [--previous builds/0.9.0]
 catalyst-kb-engine search "who approves an invoice?" --build builds/1.0.0 [-k 8] [--mode hybrid|keyword|vector]
 catalyst-kb-engine mcp --build builds/1.0.0                                             # the same, as an MCP tool
 catalyst-kb-engine evaluate questions.yaml --build builds/1.0.0 [--record KBUILD-…]     # score it
@@ -41,6 +43,14 @@ markdown. Each source's visibility is checked against GitHub first, and any disa
 document from a private source is at least `Internal`, and `--public-only` never opens a private source. The staging
 directory holds private data whenever a private source was read: keep it out of any public repository. Checkouts are
 found as `<--projects-dir>/<name>`, or given with `--project <name>=<dir>`; `gh` must be logged in.
+
+Builds can be incremental. `read-sources --previous <staging>` re-views, in each criterion whose source is unchanged,
+only the entities a journal entry since the previous read names or touched, the new ones, and what they cite. Every
+other document is carried over; repositories are always re-read. `build-vectors --previous <build>` reuses a chunk's
+vector when its exact embedding input was embedded by that build with the same model, input and prefix, and embeds
+the rest. Its manifest's `incremental` counts both. By default a chunk is embedded with its document's title and
+heading before its text (`--embed-input context`). The manifest records that, and any prefixes; `search` applies the
+build's query prefix to each question.
 
 `search` reads a vector build and writes nothing. It merges keywords (SQLite FTS5) and vectors (the question embedded
 with the build's own model, from its manifest) by reciprocal rank. Each passage cites its document, heading,

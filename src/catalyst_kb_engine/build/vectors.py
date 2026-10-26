@@ -13,6 +13,7 @@ chunks, and one unit-length vector per chunk from one embedding model, chosen wi
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import math
@@ -33,6 +34,15 @@ from catalyst_kb_engine.build.folders import (
 from catalyst_kb_engine.models import Classification
 
 BATCH = 64
+EmbedInput = Literal["text", "context"]
+"""What a chunk's embedding input is: its text alone, or `context`, its document's title and heading before it."""
+
+
+def embed_input(c: Chunk, mode: EmbedInput) -> str:
+    """The text embedded for a chunk (`eng-OUTPUT-000003`): with `context`, a short document keeps its subject."""
+    if mode == "text":
+        return c.text
+    return "\n".join(x for x in (c.title, c.heading) if x) + "\n\n" + c.text
 
 
 @dataclass(frozen=True)
@@ -72,6 +82,8 @@ class EmbeddingPolicy:
 class VectorsBuild(FoldersBuild):
     chunks: int = 0
     embedding: dict[str, Any] | None = None
+    incremental: dict[str, Any] | None = None
+    """With a previous build: which one, and how many chunks were reused and embedded."""
 
 
 def _unit(vector: list[float]) -> list[float]:
@@ -109,7 +121,17 @@ def _parquet(ids: list[str], vectors: list[list[float]], dimensions: int) -> byt
 
 
 async def build_vectors(
-    repo: Path, out: Path, info: BuildInfo, policy: EmbeddingPolicy, *, max_tokens: int = 512, overlap: int = 64
+    repo: Path,
+    out: Path,
+    info: BuildInfo,
+    policy: EmbeddingPolicy,
+    *,
+    max_tokens: int = 512,
+    overlap: int = 64,
+    embedding_input: EmbedInput = "context",
+    document_prefix: str = "",
+    query_prefix: str = "",
+    previous: Path | None = None,
 ) -> VectorsBuild:
     """Write the vector database build of `repo` into `out` (new or empty); nothing is written if it is refused."""
     refuse_written(out)
@@ -122,10 +144,19 @@ async def build_vectors(
             source=entry.meta.get("source"), url=entry.meta.get("url"),
         )  # fmt: skip
     model = policy.choose(chunks)
-    vectors = await _embed(model, [c.text for c in chunks]) if chunks else []
+    texts = [document_prefix + embed_input(c, embedding_input) for c in chunks]
+    known, incremental = _previous(previous, model, embedding_input, document_prefix)
+    missing = [t for t in dict.fromkeys(texts) if _key(t) not in known]
+    embedded = dict(zip(missing, await _embed(model, missing), strict=True)) if missing else {}
+    vectors = [embedded[t] if t in embedded else known[_key(t)] for t in texts]
     dimensions = len(vectors[0]) if vectors else 0
+    if any(len(v) != dimensions for v in vectors):
+        raise BuildError("the previous build's vectors and this build's differ in dimensions, so nothing is built")
+    if incremental is not None:
+        incremental |= {"reused": len(texts) - sum(t in embedded for t in texts), "embedded": len(missing)}
     embedding = {
         "model": model.name, "dimensions": dimensions, "where": model.where, "normalized": True, "distance": "cosine",
+        "input": embedding_input, "document_prefix": document_prefix, "query_prefix": query_prefix,
     }  # fmt: skip
     result = VectorsBuild(
         out=out,
@@ -135,6 +166,7 @@ async def build_vectors(
         left_out=selection.left_out,
         chunks=len(chunks),
         embedding=embedding,
+        incremental=incremental,
     )
     staged = stage_documents(selection, info)
     staged["chunks.jsonl"] = "".join(json.dumps(c.record(), ensure_ascii=False) + "\n" for c in chunks).encode()
@@ -145,11 +177,42 @@ async def build_vectors(
         target="vector-database",
         embedding=embedding,
         chunking={"max_tokens": max_tokens, "overlap": overlap, "by": "heading"},
+        **({"incremental": incremental} if incremental is not None else {}),
         counts={"documents": result.documents, "pointers": result.pointers, "chunks": len(chunks),
                 "left_out": result.left_out},
     )  # fmt: skip
     result.files = manifest["files"]
     return result
+
+
+def _key(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _previous(
+    previous: Path | None, model: EmbeddingModel, embedding_input: EmbedInput, document_prefix: str
+) -> tuple[dict[str, list[float]], dict[str, Any] | None]:
+    """The previous build's vectors by the hash of their exact embedding input (`eng-OUTPUT-000004`), and the
+    manifest's `incremental` record; none reused when the previous build embedded otherwise."""
+    if previous is None:
+        return {}, None
+    manifest = json.loads((previous / "manifest.json").read_text(encoding="utf-8"))
+    embedding = manifest.get("embedding") or {}
+    record: dict[str, Any] = {"previous": manifest.get("version"), "reused": 0, "embedded": 0}
+    then = (embedding.get("model"), embedding.get("input") or "text", embedding.get("document_prefix") or "")
+    if manifest.get("target") != "vector-database" or then != (model.name, embedding_input, document_prefix):
+        record["not_reused"] = "the previous build embedded with another model, input or prefix"
+        return {}, record
+    import pyarrow.parquet as pq
+
+    rows = [json.loads(line) for line in (previous / "chunks.jsonl").read_text(encoding="utf-8").splitlines()]
+    table = pq.read_table(previous / "vectors.parquet")
+    by_id = dict(zip(table.column("id").to_pylist(), table.column("vector").to_pylist(), strict=True))
+    known = {}
+    for row in rows:
+        text = document_prefix + embed_input(Chunk(**row), embedding_input)
+        known[_key(text)] = [float(x) for x in by_id[row["id"]]]
+    return known, record
 
 
 def _readme(info: BuildInfo, result: VectorsBuild, max_tokens: int, overlap: int) -> str:
@@ -171,6 +234,14 @@ account, network or model: UTF-8 markdown, JSON Lines and Apache Parquet.
 - `chunks.jsonl`: one chunk a line (`id`, `path`, `title`, `heading`, `text`, `classification`, `source`, `url`).
 - `vectors.parquet`: `id` and `vector`, in the same order. Any vector store loads it (FAISS, LanceDB, pgvector,
   Chroma); with pyarrow: `pyarrow.parquet.read_table("vectors.parquet")`.
-- Query with the same embedding model, normalized; or re-embed `chunks.jsonl` (or `docs/`) with your own model.
+- Query with the same embedding model, normalized, each question prefixed with the manifest's
+  `embedding.query_prefix`; or re-embed `chunks.jsonl` (or `docs/`) with your own model. Each chunk was embedded as
+  `embedding.document_prefix` followed by {_input_said(e)}.
 - `index.md` and `docs/` hold the documents themselves; `manifest.json` gives every file's SHA-256.
 """
+
+
+def _input_said(embedding: dict[str, Any]) -> str:
+    if embedding.get("input") == "text":
+        return "its `text` alone"
+    return "its `title`, a newline, its `heading` (when it has one), a blank line and its `text`"

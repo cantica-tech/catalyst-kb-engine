@@ -5,7 +5,7 @@ criterion, its type and its status, with its fields, sections, links and its own
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from catalyst_kb_engine.catalyst import CatalystCLI
@@ -88,19 +88,52 @@ def render(view: dict[str, Any], project: str) -> EntityDocument:
 @dataclass(frozen=True)
 class CriterionRead:
     documents: list[EntityDocument]
+    """The entities and rules viewed in this read."""
     unviewable: list[str]
     """IDs `list all` gives without a file, which `view` cannot show (a roadmap's rows): left out, and counted."""
+    carried: list[str] = field(default_factory=list)
+    """Paths (`<type>/<ID>.md`) of the documents an incremental read carries over from the previous one, unviewed."""
 
 
-def read_criterion(cli: CatalystCLI, project: str, *, workers: int = 8) -> CriterionRead:
+def _path(item: dict[str, Any]) -> str:
+    return f"{str(item['type']).lower()}/{item['id']}.md"
+
+
+def moved_since(cli: CatalystCLI, since: str) -> tuple[set[str], set[str]]:
+    """The IDs a journal entry since `since` names (its artifact, its targets) and the criterion files it touched
+    (`eng-SOURCE-000003`)."""
+    ids: set[str] = set()
+    files: set[str] = set()
+    for entry in cli.json("journal", "show", "--since", since):
+        ids.add(str(entry.get("artifact") or ""))
+        ids.update(str(t) for t in entry.get("targets") or [])
+        files.update(str(f.get("path") or "").removeprefix(".criterion/") for f in entry.get("files") or [])
+    return ids, files
+
+
+def read_criterion(
+    cli: CatalystCLI, project: str, *, workers: int = 8, since: str | None = None, have: frozenset[str] = frozenset()
+) -> CriterionRead:
     """Every entity and rule of the criterion of `project`, whose checkout `cli` runs in; its name is checked first
-    (`catalyst where`). The composed meta-rules are left out (`COMPOSED`)."""
+    (`catalyst where`). The composed meta-rules are left out (`COMPOSED`). With `since` (the previous read's time) and
+    `have` (the paths it staged), only what is new or what the journal says moved is viewed; the rest is carried."""
     named = cli.json("where").get("name")
     if named != project:
         raise SourceError(f"{cli.project} is the catalyst project {named!r}, not {project!r}")
     listed = cli.json("list", "all")
     items = [i for i in listed if i.get("file") and i["file"] not in COMPOSED]
     unviewable = sorted(i["id"] for i in listed if not i.get("file"))
+    carried: set[str] = set()
+    if since is not None:
+        ids, files = moved_since(cli, since)
+        carried = {_path(i) for i in items if _path(i) in have and i["id"] not in ids and i["file"] not in files}
+        items = [i for i in items if _path(i) not in carried]
     with ThreadPoolExecutor(max_workers=workers) as pool:
         views = list(pool.map(lambda item: cli.view(item["id"]), items))
-    return CriterionRead(sorted((render(view, project) for view in views), key=lambda d: d.path), unviewable)
+        # what a moved entity cites now shows it among its back-references: view that too
+        cited = {i for view in views for linked in (view.get("links") or {}).values() for i in linked}
+        again = [i for i in listed if i.get("id") in cited and i.get("file") and _path(i) in carried]
+        carried -= {_path(i) for i in again}
+        views += list(pool.map(lambda item: cli.view(item["id"]), again))
+    documents = sorted((render(view, project) for view in views), key=lambda d: d.path)
+    return CriterionRead(documents, unviewable, sorted(carried))
