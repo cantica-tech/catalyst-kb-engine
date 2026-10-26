@@ -19,6 +19,7 @@ import yaml
 
 from catalyst_kb_engine.build.folders import _split, refuse_written
 from catalyst_kb_engine.catalyst import CatalystCLI
+from catalyst_kb_engine.ignore import Ignored
 from catalyst_kb_engine.models import PRIVATE_FLOOR, Classification, SourceKind, Visibility
 from catalyst_kb_engine.record import KnowledgeBase
 from catalyst_kb_engine.sources.criterion import read_criterion
@@ -89,7 +90,8 @@ def _repository_files(checkout: Path) -> list[str]:
     done = subprocess.run(["git", "-C", str(checkout), "ls-files", "*.md"], capture_output=True, text=True, check=False)
     if done.returncode != 0:
         raise SourceError(f"{checkout} is not a git checkout: {done.stderr.strip()}")
-    return sorted(line for line in done.stdout.splitlines() if line)
+    ignored = Ignored(checkout)  # what catalyst ignores, a knowledge base leaves out (`eng-SOURCE-000004`)
+    return sorted(line for line in done.stdout.splitlines() if line and not ignored(line))
 
 
 def stage(
