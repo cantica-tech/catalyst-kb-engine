@@ -2,7 +2,7 @@
 the criterion); `read-sources` reads a knowledge base's sources into a private staging directory a build can read;
 `build-folders` writes a folders build (`--record` records it); `search` searches a vector build, `mcp` serves that
 search as an MCP tool, `evaluate` scores it against an evaluation set (`--record` keeps the score with the build);
-`plan` reads a recorded knowledge base back. Records go through catalyst's CLI (`CATALYST_CLI`, else `catalyst`). Exit codes: 0 done, 1 refused or failed,
+`export-sources`, `publish-check` and `site` publish a public build; `plan` reads a recorded knowledge base back. Records go through catalyst's CLI (`CATALYST_CLI`, else `catalyst`). Exit codes: 0 done, 1 refused or failed,
 2 usage."""
 
 from __future__ import annotations
@@ -77,19 +77,56 @@ def _plan(args: argparse.Namespace) -> int:
     return 0
 
 
-def _read_sources(args: argparse.Namespace) -> int:
-    from catalyst_kb_engine.sources.stage import stage, summary
-
-    cli = CatalystCLI(Path(args.project_root))
+def _projects(args: argparse.Namespace) -> Projects:
     overrides = {}
     for given in args.project or []:
         name, sep, directory = given.partition("=")
         if not sep or not name or not directory:
             raise ValueError(f"--project takes <name>=<dir>, not {given!r}")
         overrides[name] = Path(directory).expanduser()
-    projects = Projects(Path(args.projects_dir).expanduser() if args.projects_dir else None, overrides)
+    return Projects(Path(args.projects_dir).expanduser() if args.projects_dir else None, overrides)
+
+
+def _export_sources(args: argparse.Namespace) -> int:
+    from catalyst_kb_engine.publish import export_sources
+
+    listing = export_sources(read_knowledge_base(CatalystCLI(Path(args.project_root)), args.kb), _projects(args))
+    Path(args.out).write_text(json.dumps(listing, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    print(json.dumps({"out": args.out, "public_sources": len(listing["sources"])}, indent=2))
+    return 0
+
+
+def _publish_check(args: argparse.Namespace) -> int:
+    from catalyst_kb_engine.publish import load_sources, publish_check
+
+    checked = publish_check(Path(args.build), load_sources(Path(args.sources)))
+    print(json.dumps({"build": args.build, "documents": checked, "publishable": True}, indent=2))
+    return 0
+
+
+def _site(args: argparse.Namespace) -> int:
+    from catalyst_kb_engine.site import make_site
+
+    site = make_site(Path(args.build), Path(args.out), title=args.title, intro=args.intro)
+    print(json.dumps({"out": str(site.out), "guide": site.guide, "reference": site.reference}, indent=2))
+    return 0
+
+
+def _read_sources(args: argparse.Namespace) -> int:
+    from catalyst_kb_engine.sources.stage import stage, summary
+
+    cli = CatalystCLI(Path(args.project_root))
+    projects = _projects(args)
+    if args.sources:
+        from catalyst_kb_engine.publish import load_sources
+
+        kb = load_sources(Path(args.sources))
+        if kb.id != args.kb:
+            raise ValueError(f"{args.sources} is the public sources list of {kb.id}, not {args.kb}")
+    else:
+        kb = read_knowledge_base(cli, args.kb)
     staged = stage(
-        read_knowledge_base(cli, args.kb),
+        kb,
         Path(args.out),
         projects,
         public_only=args.public_only,
@@ -219,6 +256,20 @@ def _parser() -> argparse.ArgumentParser:
     r.add_argument("--public-only", action="store_true", help="open public sources only (for a public build)")
     r.add_argument("--workers", type=int, default=8, help="parallel catalyst calls per criterion")
     r.add_argument("--previous", help="an earlier staging directory: re-view only what the journal says moved")
+    r.add_argument("--sources", help="read the sources a public sources list names (export-sources), not the KB-'s")
+    x = sub.add_parser("export-sources", help="write a knowledge base's public sources list, each confirmed on GitHub")
+    x.add_argument("kb", help="the KB- ID")
+    x.add_argument("out", help="the list's file (JSON); it names public sources only")
+    x.add_argument("--projects-dir", help="the directory holding the sources' checkouts, each under its own name")
+    x.add_argument("--project", action="append", help="<name>=<dir>: a checkout elsewhere (repeatable)")
+    pc = sub.add_parser("publish-check", help="refuse to publish a build holding anything not public")
+    pc.add_argument("build", help="the public folders build")
+    pc.add_argument("--sources", required=True, help="the public sources list it was read from")
+    st = sub.add_parser("site", help="a public folders build as a site's pages (home, guide, reference)")
+    st.add_argument("build", help="the public folders build, checked by publish-check")
+    st.add_argument("out", help="the pages' directory, new or empty")
+    st.add_argument("--title", default="Documentation", help="the home page's title")
+    st.add_argument("--intro", default="", help="the home page's opening paragraph")
     b = sub.add_parser("build-folders", help="write a folders build of a knowledge base repository")
     b.add_argument("repository", help="the knowledge base repository (docs/, pointers/)")
     b.add_argument("out", help="the build's directory, new or empty")
@@ -272,7 +323,7 @@ def _parser() -> argparse.ArgumentParser:
     e.add_argument("--record", metavar="KBUILD", help="write the score into this KBUILD-'s Verification")
     pl = sub.add_parser("plan", help="read a recorded knowledge base back into its onboarding plan")
     pl.add_argument("kb", help="the KB- ID")
-    for p in (o, r, b, v, e, pl):
+    for p in (o, r, x, b, v, e, pl):
         p.add_argument("--project-root", default=".", help="the catalyst project (default: here)")
     return parser
 
@@ -288,6 +339,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         return {
             "onboard": _onboard,
             "read-sources": _read_sources,
+            "export-sources": _export_sources,
+            "publish-check": _publish_check,
+            "site": _site,
             "build-folders": _build_folders,
             "build-vectors": _build_vectors,
             "search": _search,
