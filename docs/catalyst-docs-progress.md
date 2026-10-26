@@ -2,7 +2,7 @@
 
 The handoff log of the catalyst-docs lead. Read it with [`catalyst-docs-lead.md`](catalyst-docs-lead.md) (the brief)
 and [`design/01-catalyst-docs.md`](design/01-catalyst-docs.md) (the design). The second lead session (2026-10-25)
-shipped KBM 0.6.0 and 0.6.1, and phases 0 to 3.
+shipped KBM 0.6.0 and 0.6.1, and phases 0 to 5.
 
 ## State of each phase
 
@@ -13,8 +13,9 @@ shipped KBM 0.6.0 and 0.6.1, and phases 0 to 3.
 | 1     | **done**: catalyst-kb-engine 0.4.0, `read-sources`             | `REQ-000004-7TE7wuaB` (the engine's criterion)              |
 | 2     | **done**: catalyst-kb-engine 0.5.0, `search`, `mcp`, `evaluate` | `REQ-000005-7TE7wuaB`; catalyst-docs' `KBUILD-000001-erFhHt6m` |
 | 3     | **done**: catalyst-kb-engine 0.6.0, `--previous` reads and builds | `REQ-000006-7TE7wuaB`, `REQ-000007-7TE7wuaB`; `KBUILD-000003-erFhHt6m` |
-| 4     | outline approved; pages 1–3 drafted, waiting for the owner's review | catalyst-docs' `GUIDE-OUTLINE.md`; `docs/guide/` (uncommitted) |
-| 5–6   | not started                                                  | none yet                                                   |
+| 4     | **done**: the guide's twelve pages, each approved by the owner  | catalyst-docs' `GUIDE-OUTLINE.md`, `docs/guide/`            |
+| 5     | **done**: the public site, live, built by Actions (engine 0.8.0) | `REQ-000009-7TE7wuaB`; catalyst-docs' `pages.yml`           |
+| 6     | next: the search served to the realm, behind catalyst-users   | none yet                                                   |
 
 ## What exists
 
@@ -67,16 +68,20 @@ shipped KBM 0.6.0 and 0.6.1, and phases 0 to 3.
 
 ## The exact next step
 
-Phase 4: the owner reviews pages 1 to 3 in catalyst-docs' `docs/guide/` (uncommitted). Commit them once approved, then
-draft pages 4 to 12 in batches, from public documents only. Each page carries front matter (`title`,
-`classification: Public`) and no body `#` heading. Several public documents are stale: catalyst's `README.md`,
-`GLOSSARY.md` and `beta/QUICKSTART.md` still describe `.criterion/` in the project and a `<name>.catalyst` pointer.
-The guide follows the current kernel (`CLI.md`, `INSTANTIATION-GUIDE.md`).
+Phase 6: the realm's search served behind catalyst-users (design 01 §7, §9), so a token from outside the realm is
+refused. catalyst-users has a FastAPI integration that accepts only the realm's tokens; the engine's search would run
+as such a service, with the realm build kept on the machine that serves it. Open a `REQ-` in the engine's criterion
+first.
+
+The public site is at `https://cantica-tech.github.io/catalyst-docs/`. It rebuilds on every push to catalyst-docs'
+`main` and daily. Its sources are `site/sources.json`: re-export it with `export-sources` whenever a `KSOURCE-` changes.
 
 ## Open for the owner
 
-- **Pages 1 to 3** of the guide, for review.
-- **`docs/user-generated/project-map.md`** has no `classification`, so every build of catalyst-docs refuses to run.
-  Its content is public-safe: propose `Public` to the owner, the curator.
+- **The reference includes test fixtures** (for example the UI repository's sample criterion under
+  `src/test/fixtures/`): a repository source takes all its committed markdown. A source's import could name what it
+  draws on, or the repositories could opt fixtures out with `.catalystignore`.
+- **The public build is not recorded as a `KBUILD-`**: Actions cannot reach the private criterion. Its manifest is
+  published with the site (`manifest.json`).
 - catalyst-docs' `development` has another session's commit (a project map; `KB.md` updated), not yet merged to
   `main`.
