@@ -2,7 +2,7 @@
 
 The handoff log of the catalyst-docs lead. Read it with [`catalyst-docs-lead.md`](catalyst-docs-lead.md) (the brief)
 and [`design/01-catalyst-docs.md`](design/01-catalyst-docs.md) (the design). The second lead session (2026-10-25)
-shipped KBM 0.6.0 and 0.6.1, and phases 0 to 3.
+shipped KBM 0.6.0 and 0.6.1, and phases 0 to 5.
 
 ## State of each phase
 
@@ -13,8 +13,9 @@ shipped KBM 0.6.0 and 0.6.1, and phases 0 to 3.
 | 1     | **done**: catalyst-kb-engine 0.4.0, `read-sources`             | `REQ-000004-7TE7wuaB` (the engine's criterion)              |
 | 2     | **done**: catalyst-kb-engine 0.5.0, `search`, `mcp`, `evaluate` | `REQ-000005-7TE7wuaB`; catalyst-docs' `KBUILD-000001-erFhHt6m` |
 | 3     | **done**: catalyst-kb-engine 0.6.0, `--previous` reads and builds | `REQ-000006-7TE7wuaB`, `REQ-000007-7TE7wuaB`; `KBUILD-000003-erFhHt6m` |
-| 4     | outline approved; pages 1–3 drafted, waiting for the owner's review | catalyst-docs' `GUIDE-OUTLINE.md`; `docs/guide/` (uncommitted) |
-| 5–6   | not started                                                  | none yet                                                   |
+| 4     | **done**: the guide's twelve pages, each approved by the owner  | catalyst-docs' `GUIDE-OUTLINE.md`, `docs/guide/`            |
+| 5     | **done**: the public site, live, built by Actions (engine 0.8.0) | `REQ-000009-7TE7wuaB`; catalyst-docs' `pages.yml`           |
+| 6     | **built** (engine 0.9.0); the live check waits for the owner     | `REQ-000010-7TE7wuaB` (Active), `STEP-000015-7TE7wuaB`        |
 
 ## What exists
 
@@ -67,16 +68,26 @@ shipped KBM 0.6.0 and 0.6.1, and phases 0 to 3.
 
 ## The exact next step
 
-Phase 4: the owner reviews pages 1 to 3 in catalyst-docs' `docs/guide/` (uncommitted). Commit them once approved, then
-draft pages 4 to 12 in batches, from public documents only. Each page carries front matter (`title`,
-`classification: Public`) and no body `#` heading. Several public documents are stale: catalyst's `README.md`,
-`GLOSSARY.md` and `beta/QUICKSTART.md` still describe `.criterion/` in the project and a `<name>.catalyst` pointer.
-The guide follows the current kernel (`CLI.md`, `INSTANTIATION-GUIDE.md`).
+Phase 6's live check, the last step of design 01, with the owner. catalyst-kb-engine 0.9.0's `serve` is built and
+tested offline (`tests/test_serve.py`, with catalyst-users' own token checks). The live check needs the local realm's
+`catalyst-api` secret, which only the owner supplies:
+
+```sh
+export CATALYST_USERS_SERVER=http://localhost:8080 CATALYST_USERS_API_CLIENT_SECRET=…   # the owner's
+catalyst-kb-engine serve --build ~/.catalyst/projects/catalyst-docs/realm/builds/0.2.1 &
+curl -s -H "Authorization: Bearer $(catalyst-users token --system)" localhost:8765/me      # the realm: 200
+curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer <a token from another realm>" localhost:8765/me  # 401
+```
+
+Use the same host (`localhost` or `127.0.0.1`) for the token and the service: Keycloak builds its issuer from it. Then
+`REQ-000010-7TE7wuaB` completes, and design 01 is done.
 
 ## Open for the owner
 
-- **Pages 1 to 3** of the guide, for review.
-- **`docs/user-generated/project-map.md`** has no `classification`, so every build of catalyst-docs refuses to run.
-  Its content is public-safe: propose `Public` to the owner, the curator.
+- **The reference includes test fixtures** (for example the UI repository's sample criterion under
+  `src/test/fixtures/`): a repository source takes all its committed markdown. A source's import could name what it
+  draws on, or the repositories could opt fixtures out with `.catalystignore`.
+- **The public build is not recorded as a `KBUILD-`**: Actions cannot reach the private criterion. Its manifest is
+  published with the site (`manifest.json`).
 - catalyst-docs' `development` has another session's commit (a project map; `KB.md` updated), not yet merged to
   `main`.
