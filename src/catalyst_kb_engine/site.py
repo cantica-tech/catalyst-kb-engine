@@ -66,7 +66,7 @@ def make_site(build: Path, out: Path, *, title: str, intro: str) -> Site:
         elif rel.parts[0] == "repositories" and meta.get("repository") and meta.get("path"):
             name = rel.parts[1]
             page = Path("reference", name, *rel.parts[2:])
-            url = f"https://github.com/{meta['repository']}/blob/HEAD/{meta['path']}"
+            url = meta.get("url") or f"https://github.com/{meta['repository']}/blob/HEAD/{meta['path']}"
             cite = f"> From [`{meta['repository']}`: `{meta['path']}`]({url}).\n\n"
             _write(out / page, _front({"title": _title(meta, rel)}, cite + body))
             repositories.setdefault(name, []).append((Path(*rel.parts[2:]).as_posix(), _title(meta, rel)))

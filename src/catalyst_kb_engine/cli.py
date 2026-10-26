@@ -134,6 +134,7 @@ def _read_sources(args: argparse.Namespace) -> int:
         catalyst=lambda project: CatalystCLI(project, command=cli.command),
         workers=args.workers,
         previous=Path(args.previous) if args.previous else None,
+        history=args.history,
     )
     print(json.dumps(summary(staged), indent=2))
     return 0
@@ -265,6 +266,8 @@ def _parser() -> argparse.ArgumentParser:
     r.add_argument("--workers", type=int, default=8, help="parallel catalyst calls per criterion")
     r.add_argument("--previous", help="an earlier staging directory: re-view only what the journal says moved")
     r.add_argument("--sources", help="read the sources a public sources list names (export-sources), not the KB-'s")
+    r.add_argument("--history", type=int, default=0, metavar="N",
+                   help="also read each repository's last N commits: per document, and its log (needs full clones)")  # fmt: skip
     x = sub.add_parser("export-sources", help="write a knowledge base's public sources list, each confirmed on GitHub")
     x.add_argument("kb", help="the KB- ID")
     x.add_argument("out", help="the list's file (JSON); it names public sources only")

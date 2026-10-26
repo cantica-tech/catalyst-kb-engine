@@ -86,6 +86,54 @@ def _staged_path(rel: str) -> str:
     return (path.parent / "readme.md").as_posix() if path.name == "README.md" else rel
 
 
+_FIELDS = "%h%x1f%ad%x1f%an%x1f%s"
+"""A commit as its short hash, date, author's name and subject: never an author's e-mail (`eng-SOURCE-000005`)."""
+HISTORY_DOCUMENT = "git-history.md"
+
+
+def _git(checkout: Path, *args: str) -> str:
+    done = subprocess.run(["git", "-C", str(checkout), *args], capture_output=True, text=True, check=False)
+    if done.returncode != 0:
+        raise SourceError(f"git {args[0]} failed in {checkout}: {done.stderr.strip()}")
+    return done.stdout
+
+
+def _commit_line(fields: list[str]) -> str:
+    sha, date, author, subject = [*fields, "", "", "", ""][:4]
+    return f"- {date} `{sha}` {author}: {subject}"
+
+
+def _file_history(checkout: Path, rel: str, n: int) -> str:
+    """The last `n` commits that touched `rel`, as a History section; empty when none did."""
+    out = _git(checkout, "log", f"-n{n}", "--date=short", f"--format={_FIELDS}", "--", rel)
+    lines = [_commit_line(line.split("\x1f")) for line in out.splitlines() if line]
+    return "## History\n\n" + "\n".join(lines) if lines else ""
+
+
+def _repository_history(checkout: Path, repo: str, n: int) -> str:
+    """The repository's last `n` commits across all its files, each with the files it changed."""
+    out = _git(checkout, "log", f"-n{n}", "--date=short", f"--format=%x1e{_FIELDS}", "--name-only")
+    lines = []
+    for record in out.split("\x1e"):
+        head, _, rest = record.strip("\n").partition("\n")
+        if not head:
+            continue
+        files = [f for f in rest.splitlines() if f]
+        shown = ", ".join(f"`{f}`" for f in files[:5]) + (f" and {len(files) - 5} more" if len(files) > 5 else "")
+        lines.append(_commit_line(head.split("\x1f")) + (f" ({shown})" if files else ""))
+    return f"# {repo}: recent history\n\nThe last {len(lines)} commits of `{repo}`, newest first.\n\n" + "\n".join(
+        lines
+    )
+
+
+def _require_full_history(checkout: Path) -> None:
+    if _git(checkout, "rev-parse", "--is-shallow-repository").strip() == "true":
+        raise SourceError(
+            f"{checkout} is a shallow clone, so its history is incomplete: run `git -C {checkout} fetch --unshallow`, "
+            "or read without --history"
+        )
+
+
 def _repository_files(checkout: Path) -> list[str]:
     done = subprocess.run(["git", "-C", str(checkout), "ls-files", "*.md"], capture_output=True, text=True, check=False)
     if done.returncode != 0:
@@ -104,10 +152,13 @@ def stage(
     host: Host = github_visibility,
     workers: int = 8,
     previous: Path | None = None,
+    history: int = 0,
 ) -> Staged:
     """Read every source of `kb` into `out` (new or empty). Every source's visibility is resolved before any is read,
     so a disagreement stops the whole read (`eng-SOURCE-000002`). With `previous` (an earlier staging directory of
-    the same knowledge base), each unchanged criterion source is read incrementally (`eng-SOURCE-000003`)."""
+    the same knowledge base), each unchanged criterion source is read incrementally (`eng-SOURCE-000003`). With
+    `history`, each repository's last `history` commits are read too: each document's, and the repository's own log
+    (`eng-SOURCE-000005`)."""
     refuse_written(out)
     read_at = datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
     before = _previous_read(previous, kb.id)
@@ -160,6 +211,8 @@ def stage(
         elif kind in (SourceKind.REPOSITORY, None) and (repo := github_repository(source.location)):
             name = repo.split("/")[1]
             checkout = projects.find(name)
+            if history:
+                _require_full_history(checkout)
             for rel in _repository_files(checkout):
                 own_meta, body = _split((checkout / rel).read_text(encoding="utf-8"), checkout / rel)
                 own = own_meta.get("classification")
@@ -171,7 +224,24 @@ def stage(
                     "repository": repo,
                     "path": rel,
                 }
+                if history and (section := _file_history(checkout, rel, history)):
+                    body = body.rstrip("\n") + "\n\n" + section + "\n"
                 _write(out, f"repositories/{name}/{_staged_path(rel)}", meta, body)
+            if history:
+                meta = {
+                    "title": f"{repo}: recent history",
+                    "classification": read.mark(None, base, floor),
+                    "source": sid,
+                    "repository": repo,
+                    "path": HISTORY_DOCUMENT,
+                    "url": f"https://github.com/{repo}/commits/HEAD",
+                }
+                _write(
+                    out,
+                    f"repositories/{name}/{HISTORY_DOCUMENT}",
+                    meta,
+                    _repository_history(checkout, repo, history) + "\n",
+                )
         else:
             read.skipped = f"not read: a {kind.value if kind else 'source'} at {source.location} is not supported yet"
             del reads[sid]
