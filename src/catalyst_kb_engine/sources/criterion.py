@@ -38,10 +38,11 @@ class EntityDocument:
 def _history(view: dict[str, Any]) -> list[str]:
     lines = []
     for entry in view.get("journal") or []:
-        intent = "; ".join(entry.get("intent") or [])
+        given = entry.get("intent") or []
+        intent = "; ".join([given] if isinstance(given, str) else given)  # a string, a list or nothing
         lines.append(
-            f"- {entry.get('timestamp', '')} {entry.get('actor', '')}, `{entry.get('command', '')}` "
-            f"{entry.get('action', '')}{': ' + intent if intent else ''}"
+            f"- {entry.get('timestamp') or ''} {entry.get('actor') or ''}, `{entry.get('command') or ''}` "
+            f"{entry.get('action') or ''}{': ' + intent if intent else ''}"
         )
     return lines
 
@@ -52,6 +53,10 @@ def _links(view: dict[str, Any]) -> list[str]:
     return lines + ([f"- Cited by: {', '.join(back)}"] if back else [])
 
 
+def _cells(fields: list[tuple[str, str]]) -> str:
+    return "| Field | Value |\n| --- | --- |\n" + "\n".join(f"| {k} | {v.replace('|', '/')} |" for k, v in fields)
+
+
 def _rule_status(view: dict[str, Any]) -> str:
     if view.get("retired"):
         return "retired"
@@ -59,21 +64,23 @@ def _rule_status(view: dict[str, Any]) -> str:
 
 
 def render(view: dict[str, Any], project: str) -> EntityDocument:
-    """A `view --json` record as a document: the rule's own text, or the entity's fields and sections; then its links
-    and its history (its own journal entries, never another entity's content)."""
+    """A `view --json` record as a document: the rule's own text, a table row's cells, or the entity's fields and
+    sections; then its links and its history (its own journal entries, never another entity's content)."""
     id_, type_, title = view["id"], view["type"], str(view.get("title") or view["id"])
     parts = [f"# `{id_}` {title}", f"In the criterion of `{project}`."]
     if type_ == "rule":
         status = _rule_status(view)
         text = str(view.get("text") or "")
         parts.append(text.split("\n", 1)[1].strip() if text.startswith("#") and "\n" in text else text.strip())
+    elif view.get("row"):  # an entity kept as a row of a table (`spec/view.schema.json` `tableRow`, kernel 0.116.1)
+        status = str(view.get("status") or "unknown")
+        cells = [(k, str(v)) for k, v in (view.get("fields") or {}).items() if v not in (None, "", UNSET)]
+        parts.append(f"A row of `{view.get('file')}`." + ("\n\n" + _cells(cells) if cells else ""))
     else:
         status = str(view.get("Status") or "unknown")
         fields = [(k, str(v)) for k, v in view.items() if k not in _NOT_FIELDS and v not in (None, "", UNSET)]
         if fields:
-            parts.append(
-                "| Field | Value |\n| --- | --- |\n" + "\n".join(f"| {k} | {v.replace('|', '/')} |" for k, v in fields)
-            )
+            parts.append(_cells(fields))
         for section in view.get("sections") or []:
             parts.append(f"## {section['heading']}\n\n{str(section.get('text') or '').strip()}")
     if links := _links(view):
@@ -81,7 +88,7 @@ def render(view: dict[str, Any], project: str) -> EntityDocument:
     history = _history(view)
     if history:
         parts.append("## History\n\n" + "\n".join(history))
-    updated = max((e.get("timestamp", "") for e in view.get("journal") or []), default="")[:10] or None
+    updated = max((e.get("timestamp") or "" for e in view.get("journal") or []), default="")[:10] or None
     return EntityDocument(id_, type_, title, status, updated, "\n\n".join(p for p in parts if p) + "\n")
 
 
