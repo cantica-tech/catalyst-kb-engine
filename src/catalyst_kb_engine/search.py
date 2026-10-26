@@ -21,6 +21,9 @@ RRF_K = 60
 """Reciprocal rank fusion's constant: a passage scores the sum of 1 / (60 + its rank) in each ranking."""
 CANDIDATES = 50
 """How many passages each ranking contributes to the fusion."""
+KEYWORD_WEIGHTS = (5.0, 3.0, 1.0)
+"""`bm25`'s weight for a match in a chunk's title, its heading and its text: measured on catalyst-docs' realm against
+1/1/1, 3/2/1 and 10/5/1, the best hybrid recall (REQ-000011-7TE7wuaB)."""
 _WORD = re.compile(r"[\w-]{2,}", re.UNICODE)
 
 Embed = Callable[[str], Awaitable[list[float]]]
@@ -108,8 +111,10 @@ class BuildIndex:
         query = fts_query(question)
         if not query:
             return []
+        bm25 = "bm25(chunks, {}, {}, {})".format(*KEYWORD_WEIGHTS)
         rows = self.fts.execute(
-            "SELECT rowid, bm25(chunks) FROM chunks WHERE chunks MATCH ? ORDER BY bm25(chunks) LIMIT ?", (query, n)
+            f"SELECT rowid, {bm25} FROM chunks WHERE chunks MATCH ? ORDER BY {bm25} LIMIT ?",  # noqa: S608 - constants
+            (query, n),
         ).fetchall()
         return [(int(rowid), -float(score)) for rowid, score in rows]
 

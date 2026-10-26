@@ -201,3 +201,23 @@ def test_a_search_embeds_the_question_with_the_builds_query_prefix(build: Path):
 
     asyncio.run(BuildIndex(build).search("invoice", mode=Mode.VECTOR, embed=record))
     assert asked == ["search_query: invoice"]
+
+
+def test_a_title_match_outranks_a_match_in_the_text(tmp_path: Path):
+    import json as _json
+
+    out = tmp_path / "b"
+    rows = [
+        ("c1", "docs/a.md", "Release notes", "", "A note on invoices and other things in passing."),
+        ("c2", "docs/b.md", "Invoices", "", "How the ledger is kept."),
+    ]
+    (out / "docs").mkdir(parents=True)
+    for _, path, title, _, text in rows:
+        (out / path).write_text(f"---\ntitle: {title}\nclassification: Public\n---\n\n{text}\n")
+    (out / "chunks.jsonl").write_text("".join(_json.dumps({"id": i, "path": p, "title": t, "heading": h, "text": x,
+        "classification": "Public", "source": None, "url": None}) + "\n" for i, p, t, h, x in rows))  # fmt: skip
+    pq.write_table(pa.table({"id": ["c1", "c2"], "vector": pa.array([[1.0], [1.0]], pa.list_(pa.float32(), 1))}),
+                   out / "vectors.parquet")  # fmt: skip
+    (out / "manifest.json").write_text(_json.dumps({"target": "vector-database", "embedding": {"dimensions": 1}}))
+    passages = asyncio.run(BuildIndex(out).search("invoices", mode=Mode.KEYWORD))
+    assert passages[0].title == "Invoices"
