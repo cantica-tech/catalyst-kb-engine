@@ -2,10 +2,10 @@
 the criterion); `read-sources` reads a knowledge base's sources into a private staging directory a build can read;
 `build-folders` writes a folders build (`--record` records it); `search` searches a vector build, `mcp` serves that
 search as an MCP tool, `evaluate` scores it against an evaluation set (`--record` keeps the score with the build);
-`export-sources`, `publish-check` and `site` publish a public build; `repository` tells a GitHub or Azure DevOps
-repository URL's host, name and visibility; `serve` serves the search to the realm, behind catalyst-users; `plan`
-reads a recorded knowledge base back. Records go through catalyst's CLI (`CATALYST_CLI`, else `catalyst`). Exit codes:
-0 done, 1 refused or failed, 2 usage."""
+`export-sources`, `publish-check` and `site` publish a public build; `repository` tells a git repository URL's host
+(GitHub, Azure DevOps, any other), name and visibility; `serve` serves the search to the realm, behind
+catalyst-users; `plan` reads a recorded knowledge base back. Records go through catalyst's CLI (`CATALYST_CLI`, else
+`catalyst`). Exit codes: 0 done, 1 refused or failed, 2 usage."""
 
 from __future__ import annotations
 
@@ -103,7 +103,7 @@ def _repository(args: argparse.Namespace) -> int:
 
     found = repository(args.url)
     if found is None:
-        raise ValueError(f"{args.url} is not a GitHub or Azure DevOps repository URL")
+        raise ValueError(f"{args.url} is not a git repository URL (https://, ssh:// or user@host:path)")
     visibility = hosted_visibility(found.path)
     print(json.dumps({
         "host": found.host, "repository": found.path, "name": found.name, "clone_url": found.clone_url,
@@ -290,7 +290,7 @@ def _parser() -> argparse.ArgumentParser:
     x.add_argument("out", help="the list's file (JSON); it names public sources only")
     x.add_argument("--projects-dir", help="the directory holding the sources' checkouts, each under its own name")
     x.add_argument("--project", action="append", help="<name>=<dir>: a checkout elsewhere (repeatable)")
-    rp = sub.add_parser("repository", help="a GitHub or Azure DevOps repository URL: its host, name and visibility")
+    rp = sub.add_parser("repository", help="a git repository URL (https, ssh): its host, name and visibility")
     rp.add_argument("url", help="https or ssh; Azure DevOps reads AZURE_DEVOPS_EXT_PAT for a private project")
     pc = sub.add_parser("publish-check", help="refuse to publish a build holding anything not public")
     pc.add_argument("build", help="the public folders build")
