@@ -201,3 +201,15 @@ def test_a_private_source_read_from_a_list_is_internal(tmp_path: Path):
     kb = KnowledgeBase("KB-000001-Ab3xR9pQ", Classification.INTERNAL, Classification.PUBLIC, [("KSOURCE-1", source)])
     stage(kb, tmp_path / "out", Projects(tmp_path / "repos"), host=lambda _: None)  # unknown: Private
     assert "classification: Internal" in (tmp_path / "out" / "docs" / "repositories" / "app" / "guide.md").read_text()
+
+
+def test_the_anonymous_read_ignores_git_configuration_from_the_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    bare = _bare(tmp_path)
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+    monkeypatch.setenv("GIT_CONFIG_KEY_0", f"url.{bare}.insteadOf")
+    monkeypatch.setenv("GIT_CONFIG_VALUE_0", "https://git.example.invalid/app.git")
+    monkeypatch.setenv("GIT_CONFIG_PARAMETERS", f"'url.{bare}.insteadof'='https://git.example.invalid/other.git'")
+    assert anonymous_visibility("https://git.example.invalid/app.git") is None
+    assert anonymous_visibility("https://git.example.invalid/other.git") is None

@@ -180,11 +180,12 @@ def azure_visibility(path: str, get: Callable[[str], object | None] | None = Non
 
 def anonymous_visibility(*urls: str) -> Visibility | None:
     """`Public` when git reads one of `urls` with no credential of this machine: no credential helper, no `.netrc`,
-    no git configuration (a `url.insteadOf` could add one), no prompt; else None, since a refusal does not tell
-    private from missing."""
+    no git configuration, from files or the environment (a `url.insteadOf` or an `http.extraHeader` could add one), no
+    prompt; else None, since a refusal does not tell private from missing."""
+    inherited = {k: v for k, v in os.environ.items() if not k.startswith("GIT_CONFIG")}
     with tempfile.TemporaryDirectory() as home:
         env = {
-            **os.environ, "HOME": home, "XDG_CONFIG_HOME": home, "GIT_CONFIG_NOSYSTEM": "1",
+            **inherited, "HOME": home, "XDG_CONFIG_HOME": home, "GIT_CONFIG_NOSYSTEM": "1",
             "GIT_CONFIG_GLOBAL": os.devnull, "GIT_TERMINAL_PROMPT": "0", "GIT_ASKPASS": "", "SSH_ASKPASS": "",
         }  # fmt: skip
         for url in urls:
