@@ -8,6 +8,7 @@ import json
 import os
 import re
 import subprocess
+import tempfile
 import tomllib
 import urllib.error
 import urllib.parse
@@ -18,20 +19,16 @@ from pathlib import Path
 
 from catalyst_kb_engine.models import Source, Visibility
 
-_GITHUB = re.compile(
-    r"^(?:https://github\.com/|git@github\.com:|ssh://git@github\.com/)([\w.-]+/[\w.-]+?)(?:\.git)?/?$"
-)
-_AZURE = (
-    re.compile(r"^https://(?:[^@/]+@)?dev\.azure\.com/([^/]+)/([^/]+)/_git/([^/?#]+?)(?:\.git)?/?$"),
-    re.compile(r"^https://(?:[^@/]+@)?([\w-]+)\.visualstudio\.com/(?:DefaultCollection/)?([^/]+)/_git/([^/?#]+?)/?$"),
-    re.compile(r"^(?:ssh://)?git@ssh\.dev\.azure\.com[:/]v3/([^/]+)/([^/]+)/([^/]+?)/?$"),
-)
+_SCP = re.compile(r"^(?:[^@/\s]+@)?([^:/\s]+):(?!//)(.+)$")
+"""A git URL in scp form: `[user@]host:path`."""
+_SCHEMES = {"https", "http", "ssh", "git", "git+ssh", "ssh+git"}
+_GITHUB_HOSTS = {"github.com", "www.github.com", "ssh.github.com"}
 
-GITHUB, AZURE_DEVOPS = "github", "azure-devops"
+GITHUB, AZURE_DEVOPS, GIT = "github", "azure-devops", "git"
 
 Host = Callable[[str], Visibility | None]
-"""A repository's path (GitHub `owner/name`, Azure DevOps `org/project/name`) to its visibility, or None when it
-cannot be told."""
+"""A repository's path (GitHub `owner/name`, Azure DevOps `org/project/name`, any other host `<host>/<path>`) to its
+visibility, or None when it cannot be told."""
 
 
 class SourceError(Exception):
@@ -40,10 +37,12 @@ class SourceError(Exception):
 
 @dataclass(frozen=True)
 class Repository:
-    """A hosted git repository: GitHub's `owner/name`, or Azure DevOps' `org/project/name` (URL-encoded as given)."""
+    """A hosted git repository: GitHub's `owner/name`, Azure DevOps' `org/project/name`, or any other host's
+    `<host>/<path>` (URL-encoded as given). `suffix` is the `.git` its URL ended with, for cloning; not its identity."""
 
     host: str
     path: str
+    suffix: str = field(default="", compare=False)
 
     @property
     def name(self) -> str:
@@ -54,41 +53,87 @@ class Repository:
         if self.host == AZURE_DEVOPS:
             org, project, name = self.path.split("/")
             return f"https://dev.azure.com/{org}/{project}/_git/{name}"
+        if self.host == GIT:
+            return f"https://{self.path}"
         return f"https://github.com/{self.path}"
 
     @property
     def clone_url(self) -> str:
-        return self.web_url if self.host == AZURE_DEVOPS else f"{self.web_url}.git"
+        if self.host == AZURE_DEVOPS:
+            return self.web_url
+        return self.web_url + (self.suffix if self.host == GIT else ".git")
 
     def file_url(self, path: str) -> str:
         if self.host == AZURE_DEVOPS:
             return f"{self.web_url}?path=/{urllib.parse.quote(path)}"
+        if self.host == GIT:
+            return self.web_url  # no file address any host shares
         return f"{self.web_url}/blob/HEAD/{path}"
 
     @property
     def commits_url(self) -> str:
-        return f"{self.web_url}/commits" if self.host == AZURE_DEVOPS else f"{self.web_url}/commits/HEAD"
+        if self.host == AZURE_DEVOPS:
+            return f"{self.web_url}/commits"
+        return self.web_url if self.host == GIT else f"{self.web_url}/commits/HEAD"
+
+
+def _split(url: str) -> tuple[str, str, str] | None:
+    """A git URL's host, path and `.git` suffix: `https://`, `http://`, `ssh://` (a user, a port) or `[user@]host:path`."""
+    url = url.strip()
+    if "://" in url:
+        parts = urllib.parse.urlsplit(url)
+        if parts.scheme.lower() not in _SCHEMES or not parts.hostname:
+            return None
+        host, path = parts.hostname.lower(), parts.path
+    elif match := _SCP.match(url):
+        host, path = match.group(1).lower(), match.group(2)
+    else:
+        return None
+    path = path.strip("/")
+    suffix = ".git" if path.endswith(".git") else ""
+    path = path.removesuffix(".git").strip("/")
+    return (host, path, suffix) if path else None
+
+
+def _azure(host: str, parts: list[str]) -> str | None:
+    """`org/project/name` of an Azure DevOps address, else None."""
+    if host in ("ssh.dev.azure.com", "vs-ssh.visualstudio.com"):
+        return "/".join(parts[1:]) if len(parts) == 4 and parts[0] == "v3" else None
+    if host == "dev.azure.com":
+        org, rest = (parts[0], parts[1:]) if parts else ("", [])
+    elif host.endswith(".visualstudio.com"):
+        org, rest = host.split(".", 1)[0], [p for p in parts if p != "DefaultCollection"]
+    else:
+        return None
+    return f"{org}/{rest[0]}/{rest[2]}" if len(rest) == 3 and rest[1] == "_git" and org else None
 
 
 def repository(url: str) -> Repository | None:
-    """The GitHub or Azure DevOps repository a URL (https or ssh) names, else None."""
-    url = url.strip()
-    if match := _GITHUB.match(url):
-        return Repository(GITHUB, match.group(1))
-    for pattern in _AZURE:
-        if match := pattern.match(url):
-            return Repository(AZURE_DEVOPS, "/".join(match.groups()))
-    return None
+    """The repository a git URL names: GitHub's, Azure DevOps', or, on any other host, a plain git repository."""
+    split = _split(url)
+    if split is None:
+        return None
+    host, path, suffix = split
+    parts = path.split("/")
+    if host in _GITHUB_HOSTS:
+        return Repository(GITHUB, "/".join(parts[:2])) if len(parts) >= 2 else None
+    if host == "dev.azure.com" or host.endswith(".visualstudio.com") or host == "ssh.dev.azure.com":
+        found = _azure(host, parts)
+        return Repository(AZURE_DEVOPS, found) if found else None
+    return Repository(GIT, f"{host}/{path}", suffix) if len(parts) >= 1 and "." in host else None
 
 
 def github_repository(url: str) -> str | None:
     """`owner/name` of a GitHub URL (https or ssh), else None."""
-    match = _GITHUB.match(url.strip())
-    return match.group(1) if match else None
+    found = repository(url)
+    return found.path if found and found.host == GITHUB else None
 
 
 def repository_of(path: str) -> Repository:
-    """A repository from its path: three segments are Azure DevOps', two GitHub's."""
+    """A repository from its path: a host first (it has a dot) is any git host's, three segments Azure DevOps',
+    two GitHub's."""
+    if "." in path.split("/", 1)[0]:
+        return Repository(GIT, path)
     return Repository(AZURE_DEVOPS if path.count("/") == 2 else GITHUB, path)
 
 
@@ -133,10 +178,41 @@ def azure_visibility(path: str, get: Callable[[str], object | None] | None = Non
     return Visibility.PUBLIC if visibility.lower() == "public" else Visibility.PRIVATE
 
 
+def anonymous_visibility(*urls: str) -> Visibility | None:
+    """`Public` when git reads one of `urls` with no credential of this machine: no credential helper, no `.netrc`,
+    no git configuration (a `url.insteadOf` could add one), no prompt; else None, since a refusal does not tell
+    private from missing."""
+    with tempfile.TemporaryDirectory() as home:
+        env = {
+            **os.environ, "HOME": home, "XDG_CONFIG_HOME": home, "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_CONFIG_GLOBAL": os.devnull, "GIT_TERMINAL_PROMPT": "0", "GIT_ASKPASS": "", "SSH_ASKPASS": "",
+        }  # fmt: skip
+        for url in urls:
+            try:
+                done = subprocess.run(
+                    ["git", "-c", "credential.helper=", "ls-remote", "--exit-code", url, "HEAD"],
+                    capture_output=True, env=env, timeout=60, check=False,
+                )  # fmt: skip
+            except subprocess.TimeoutExpired:
+                continue
+            if done.returncode == 0:
+                return Visibility.PUBLIC
+    return None
+
+
 def hosted_visibility(path: str) -> Visibility | None:
-    """A repository's visibility on its own host, GitHub or Azure DevOps."""
+    """A repository's visibility on its own host: GitHub's or Azure DevOps' answer, else (any other host, or theirs
+    unknown) `Public` only when git reads it anonymously."""
     found = repository_of(path)
-    return azure_visibility(found.path) if found.host == AZURE_DEVOPS else github_visibility(found.path)
+    if found.host == AZURE_DEVOPS:
+        told = azure_visibility(found.path)
+    elif found.host == GITHUB:
+        told = github_visibility(found.path)
+    else:
+        told = None
+    if told is not None:
+        return told
+    return anonymous_visibility(found.web_url + ".git", found.web_url)
 
 
 @dataclass

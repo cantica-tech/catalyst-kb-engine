@@ -1,3 +1,3 @@
 """The knowledge base module's engine (catalyst-kb-engine)."""
 
-__version__ = "0.12.0"
+__version__ = "0.13.0"

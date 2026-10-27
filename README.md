@@ -42,15 +42,17 @@ base module's `kbm-build/1` format, readable by any model without catalyst.
 
 `read-sources` reads every live source of a knowledge base into a staging directory, in the layout the builds read:
 a catalyst criterion (`Kind` `Criterion`) through catalyst's CLI in its project, one document per entity and rule
-citing its ID, criterion and status with its own history; a GitHub or Azure DevOps repository from its checkout, its
-committed markdown. Each source's visibility is checked against its host first (on Azure DevOps, its project's), and
-any disagreement stops the read. Every
+citing its ID, criterion and status with its own history; a git repository (GitHub, Azure DevOps, or any other host,
+given as an `https://`, `ssh://` or `user@host:path` URL) from its checkout, its committed markdown. Each source's
+visibility is checked against its host first (on Azure DevOps, its project's; on any other host, it is public only
+when git reads it anonymously, with no credential of this machine), and any disagreement stops the read. Every
 document from a private source is at least `Internal`, and `--public-only` never opens a private source. The staging
 directory holds private data whenever a private source was read: keep it out of any public repository. Checkouts are
 found as `<--projects-dir>/<name>`, or given with `--project <name>=<dir>`. GitHub is asked through `gh`, which must
 be logged in; Azure DevOps through its REST API, anonymously (a public project answers) or with a personal access token
-in `AZURE_DEVOPS_EXT_PAT` (a private project's visibility, read scope). `repository <url>` says a repository URL's
-host, name, clone URL and visibility, as JSON, for a script deciding what to read.
+in `AZURE_DEVOPS_EXT_PAT` (a private project's visibility, read scope). When GitHub or Azure DevOps cannot answer, the same anonymous read
+may confirm a public repository. `repository <url>` says a repository URL's host, name, clone URL and visibility, as
+JSON, for a script deciding what to read.
 
 What a `.catalystignore` opts out of catalyst (catalyst's `FORMAT.md` §11) is never part of a knowledge base: the
 builds skip it in the knowledge base repository, and `read-sources` skips it in a repository source.
