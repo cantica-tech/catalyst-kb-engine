@@ -166,3 +166,38 @@ def test_the_repository_command(monkeypatch: pytest.MonkeyPatch, capsys: pytest.
                     "clone_url": "https://dev.azure.com/acme/Payments/_git/app",
                     "web_url": "https://dev.azure.com/acme/Payments/_git/app", "visibility": "Public"}  # fmt: skip
     assert cli.main(["repository", "not a url"]) == 1
+
+
+def test_a_sources_list_may_name_private_sources_for_a_private_read_only(tmp_path: Path):
+    from catalyst_kb_engine.build.folders import BuildError
+    from catalyst_kb_engine.publish import load_sources
+
+    listing = tmp_path / "sources.json"
+    listing.write_text(json.dumps({
+        "format": "kbm-sources/1", "knowledge_base": "KB-1", "classification": "Internal",
+        "default_classification": "Internal",
+        "sources": [
+            {"id": "a", "title": "a", "location": "https://github.com/acme/a", "kind": "Repository", "visibility": "Public"},
+            {"id": "b", "title": "b", "location": "https://dev.azure.com/acme/P/_git/b", "kind": "Repository",
+             "visibility": "Private"},
+            {"id": "c", "title": "c", "location": "https://git.example.org/c.git", "kind": "Repository"},
+        ],
+    }))  # fmt: skip
+    with pytest.raises(BuildError, match="public list holds public sources only"):
+        load_sources(listing)
+    kb = load_sources(listing, public_only=False)
+    assert [s.visibility for _, s in kb.sources] == [Visibility.PUBLIC, Visibility.PRIVATE, None]
+
+
+def test_a_private_source_read_from_a_list_is_internal(tmp_path: Path):
+    checkout = tmp_path / "repos" / "app"
+    checkout.mkdir(parents=True)
+    (checkout / "guide.md").write_text("# Guide\n\nText.\n")
+    subprocess.run(["git", "init", "-q", str(checkout)], check=True)
+    subprocess.run(["git", "-C", str(checkout), "add", "-A"], check=True)
+    subprocess.run(["git", "-C", str(checkout), "-c", "user.name=Ada", "-c", "user.email=a@example.com",
+                    "commit", "-q", "-m", "Add the guide"], check=True)  # fmt: skip
+    source = Source(title="app", location="https://git.example.org/app.git", kind=SourceKind.REPOSITORY)
+    kb = KnowledgeBase("KB-000001-Ab3xR9pQ", Classification.INTERNAL, Classification.PUBLIC, [("KSOURCE-1", source)])
+    stage(kb, tmp_path / "out", Projects(tmp_path / "repos"), host=lambda _: None)  # unknown: Private
+    assert "classification: Internal" in (tmp_path / "out" / "docs" / "repositories" / "app" / "guide.md").read_text()

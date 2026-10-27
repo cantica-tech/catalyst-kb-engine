@@ -81,7 +81,9 @@ base's criterion.
 
 A public site is published from a public build. `export-sources` writes a knowledge base's public sources list:
 each source's visibility is confirmed on its host, and a private one is never written. `read-sources --sources <list>`
-reads from that list where the criterion is not available, such as a publishing service's runner. `publish-check`
+reads from that list where the criterion is not available, such as a publishing service's runner. A list read without
+`--public-only` may also name private sources (recorded `Private`, or with no visibility, which their host then tells):
+their documents are at least `Internal`, and `publish-check` refuses such a list. `publish-check`
 refuses a build holding any document whose source the list does not name, or that is not `Public`. `site` makes the
 pages: the knowledge base's own pages (`docs/guide/`) as written, and one reference page per document citing its file.
 catalyst-docs builds its site this way in GitHub Actions and deploys it to Pages, with no branch keeping it.

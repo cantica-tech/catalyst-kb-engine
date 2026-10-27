@@ -47,23 +47,25 @@ def export_sources(kb: KnowledgeBase, projects: Projects, host: Host = hosted_vi
     }
 
 
-def load_sources(path: Path) -> KnowledgeBase:
-    """A public sources list as the knowledge base `read-sources` reads; refused if it names a source not public."""
+def load_sources(path: Path, *, public_only: bool = True) -> KnowledgeBase:
+    """A sources list as the knowledge base `read-sources` reads. A public one (`public_only`, a publication's) is
+    refused if it names a source not public; one for a private read may name private sources, or leave an entry's
+    visibility unrecorded for its host to tell (`eng-SOURCE-000002`)."""
     data = json.loads(path.read_text(encoding="utf-8"))
     if data.get("format") != FORMAT:
         raise BuildError(f"{path} is not a public sources list ({FORMAT})")
     sources = []
     for entry in data.get("sources") or []:
-        if entry.get("visibility") != Visibility.PUBLIC.value:
-            raise BuildError(
-                f"{path} names {entry.get('id')} as {entry.get('visibility')}: a list holds public sources only"
-            )
+        recorded = entry.get("visibility")
+        if public_only and recorded != Visibility.PUBLIC.value:
+            raise BuildError(f"{path} names {entry.get('id')} as {recorded}: a public list holds public sources only")
         mark = entry.get("classification")
         sources.append((
             entry["id"],
             Source(
                 title=entry["title"], location=entry["location"],
-                kind=SourceKind(entry["kind"]) if entry.get("kind") else None, visibility=Visibility.PUBLIC,
+                kind=SourceKind(entry["kind"]) if entry.get("kind") else None,
+                visibility=Visibility(recorded) if recorded else None,
                 classification=Classification(mark) if mark else None,
             ),
         ))  # fmt: skip
