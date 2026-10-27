@@ -136,7 +136,7 @@ def _read_sources(args: argparse.Namespace) -> int:
     if args.sources:
         from catalyst_kb_engine.publish import load_sources
 
-        kb = load_sources(Path(args.sources))
+        kb = load_sources(Path(args.sources), public_only=args.public_only)
         if kb.id != args.kb:
             raise ValueError(f"{args.sources} is the public sources list of {kb.id}, not {args.kb}")
     else:
@@ -280,7 +280,11 @@ def _parser() -> argparse.ArgumentParser:
     r.add_argument("--public-only", action="store_true", help="open public sources only (for a public build)")
     r.add_argument("--workers", type=int, default=8, help="parallel catalyst calls per criterion")
     r.add_argument("--previous", help="an earlier staging directory: re-view only what the journal says moved")
-    r.add_argument("--sources", help="read the sources a public sources list names (export-sources), not the KB-'s")
+    r.add_argument(
+        "--sources",
+        help="read the sources a sources list names (export-sources' public one, or one naming private sources "
+        "without --public-only), not the KB-'s",
+    )
     r.add_argument("--history", type=int, default=0, metavar="N",
                    help="also read each repository's last N commits: per document, and its log (needs full clones)")  # fmt: skip
     x = sub.add_parser(
