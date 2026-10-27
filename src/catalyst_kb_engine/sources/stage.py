@@ -27,8 +27,8 @@ from catalyst_kb_engine.sources.visibility import (
     Host,
     Projects,
     SourceError,
-    github_repository,
-    github_visibility,
+    hosted_visibility,
+    repository,
     resolve as resolve_visibility,
 )
 
@@ -149,7 +149,7 @@ def stage(
     *,
     public_only: bool = False,
     catalyst: Callable[[Path], CatalystCLI] = CatalystCLI,
-    host: Host = github_visibility,
+    host: Host = hosted_visibility,
     workers: int = 8,
     previous: Path | None = None,
     history: int = 0,
@@ -208,8 +208,8 @@ def stage(
                 if doc.updated:
                     meta["updated"] = doc.updated
                 _write(out, f"criteria/{name}/{doc.path}", meta, doc.body)
-        elif kind in (SourceKind.REPOSITORY, None) and (repo := github_repository(source.location)):
-            name = repo.split("/")[1]
+        elif kind in (SourceKind.REPOSITORY, None) and (hosted := repository(source.location)):
+            repo, name = hosted.path, hosted.name
             checkout = projects.find(name)
             if history:
                 _require_full_history(checkout)
@@ -234,7 +234,7 @@ def stage(
                     "source": sid,
                     "repository": repo,
                     "path": HISTORY_DOCUMENT,
-                    "url": f"https://github.com/{repo}/commits/HEAD",
+                    "url": hosted.commits_url,
                 }
                 _write(
                     out,

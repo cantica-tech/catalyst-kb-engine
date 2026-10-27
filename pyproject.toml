@@ -1,6 +1,6 @@
 [project]
 name = "catalyst-kb-engine"
-version = "0.11.0"
+version = "0.12.0"
 description = "The knowledge base module's engine: onboarding and builds as workflows (Pydantic AI, pydantic-graph), producing organized markdown folders or vector databases any model can read"
 readme = "README.md"
 license = "Apache-2.0"

@@ -42,11 +42,15 @@ base module's `kbm-build/1` format, readable by any model without catalyst.
 
 `read-sources` reads every live source of a knowledge base into a staging directory, in the layout the builds read:
 a catalyst criterion (`Kind` `Criterion`) through catalyst's CLI in its project, one document per entity and rule
-citing its ID, criterion and status with its own history; a GitHub repository from its checkout, its committed
-markdown. Each source's visibility is checked against GitHub first, and any disagreement stops the read. Every
+citing its ID, criterion and status with its own history; a GitHub or Azure DevOps repository from its checkout, its
+committed markdown. Each source's visibility is checked against its host first (on Azure DevOps, its project's), and
+any disagreement stops the read. Every
 document from a private source is at least `Internal`, and `--public-only` never opens a private source. The staging
 directory holds private data whenever a private source was read: keep it out of any public repository. Checkouts are
-found as `<--projects-dir>/<name>`, or given with `--project <name>=<dir>`; `gh` must be logged in.
+found as `<--projects-dir>/<name>`, or given with `--project <name>=<dir>`. GitHub is asked through `gh`, which must
+be logged in; Azure DevOps through its REST API, anonymously (a public project answers) or with a personal access token
+in `AZURE_DEVOPS_EXT_PAT` (a private project's visibility, read scope). `repository <url>` says a repository URL's
+host, name, clone URL and visibility, as JSON, for a script deciding what to read.
 
 What a `.catalystignore` opts out of catalyst (catalyst's `FORMAT.md` §11) is never part of a knowledge base: the
 builds skip it in the knowledge base repository, and `read-sources` skips it in a repository source.
@@ -74,7 +78,7 @@ build's `KBUILD-` `Verification`. An evaluation set drawn from private sources i
 base's criterion.
 
 A public site is published from a public build. `export-sources` writes a knowledge base's public sources list:
-each source's visibility is confirmed on GitHub, and a private one is never written. `read-sources --sources <list>`
+each source's visibility is confirmed on its host, and a private one is never written. `read-sources --sources <list>`
 reads from that list where the criterion is not available, such as a publishing service's runner. `publish-check`
 refuses a build holding any document whose source the list does not name, or that is not `Public`. `site` makes the
 pages: the knowledge base's own pages (`docs/guide/`) as written, and one reference page per document citing its file.

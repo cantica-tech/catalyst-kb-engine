@@ -22,6 +22,7 @@ from typing import Any
 import yaml
 
 from catalyst_kb_engine.build.folders import BuildError, _split, refuse_written
+from catalyst_kb_engine.sources.visibility import repository_of
 
 OWN = "guide"
 """Where the knowledge base's own written pages are, under a build's `docs/`."""
@@ -66,7 +67,7 @@ def make_site(build: Path, out: Path, *, title: str, intro: str) -> Site:
         elif rel.parts[0] == "repositories" and meta.get("repository") and meta.get("path"):
             name = rel.parts[1]
             page = Path("reference", name, *rel.parts[2:])
-            url = meta.get("url") or f"https://github.com/{meta['repository']}/blob/HEAD/{meta['path']}"
+            url = meta.get("url") or repository_of(str(meta["repository"])).file_url(str(meta["path"]))
             cite = f"> From [`{meta['repository']}`: `{meta['path']}`]({url}).\n\n"
             _write(out / page, _front({"title": _title(meta, rel)}, cite + body))
             repositories.setdefault(name, []).append((Path(*rel.parts[2:]).as_posix(), _title(meta, rel)))

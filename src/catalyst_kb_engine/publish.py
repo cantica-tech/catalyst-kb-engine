@@ -16,14 +16,14 @@ from typing import Any
 from catalyst_kb_engine.build.folders import BuildError, _split
 from catalyst_kb_engine.models import Classification, Source, SourceKind, Visibility
 from catalyst_kb_engine.record import KnowledgeBase
-from catalyst_kb_engine.sources.visibility import Host, Projects, github_visibility, resolve
+from catalyst_kb_engine.sources.visibility import Host, Projects, hosted_visibility, resolve
 
 FORMAT = "kbm-sources/1"
 STAGED = ("repositories", "criteria")
 """Where a staged source's documents are, under a build's `docs/`; anything else is the knowledge base's own."""
 
 
-def export_sources(kb: KnowledgeBase, projects: Projects, host: Host = github_visibility) -> dict[str, Any]:
+def export_sources(kb: KnowledgeBase, projects: Projects, host: Host = hosted_visibility) -> dict[str, Any]:
     """The knowledge base's public sources, each one's visibility resolved on its host first; a private one is left
     out, never written."""
     sources = []
