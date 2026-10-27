@@ -2,9 +2,10 @@
 the criterion); `read-sources` reads a knowledge base's sources into a private staging directory a build can read;
 `build-folders` writes a folders build (`--record` records it); `search` searches a vector build, `mcp` serves that
 search as an MCP tool, `evaluate` scores it against an evaluation set (`--record` keeps the score with the build);
-`export-sources`, `publish-check` and `site` publish a public build; `serve` serves the search to the realm, behind
-catalyst-users; `plan` reads a recorded knowledge base back. Records go through catalyst's CLI (`CATALYST_CLI`, else `catalyst`). Exit codes: 0 done, 1 refused or failed,
-2 usage."""
+`export-sources`, `publish-check` and `site` publish a public build; `repository` tells a GitHub or Azure DevOps
+repository URL's host, name and visibility; `serve` serves the search to the realm, behind catalyst-users; `plan`
+reads a recorded knowledge base back. Records go through catalyst's CLI (`CATALYST_CLI`, else `catalyst`). Exit codes:
+0 done, 1 refused or failed, 2 usage."""
 
 from __future__ import annotations
 
@@ -94,6 +95,20 @@ def _export_sources(args: argparse.Namespace) -> int:
     listing = export_sources(read_knowledge_base(CatalystCLI(Path(args.project_root)), args.kb), _projects(args))
     Path(args.out).write_text(json.dumps(listing, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     print(json.dumps({"out": args.out, "public_sources": len(listing["sources"])}, indent=2))
+    return 0
+
+
+def _repository(args: argparse.Namespace) -> int:
+    from catalyst_kb_engine.sources.visibility import hosted_visibility, repository
+
+    found = repository(args.url)
+    if found is None:
+        raise ValueError(f"{args.url} is not a GitHub or Azure DevOps repository URL")
+    visibility = hosted_visibility(found.path)
+    print(json.dumps({
+        "host": found.host, "repository": found.path, "name": found.name, "clone_url": found.clone_url,
+        "web_url": found.web_url, "visibility": visibility.value if visibility else None,
+    }, indent=2))  # fmt: skip
     return 0
 
 
@@ -268,11 +283,15 @@ def _parser() -> argparse.ArgumentParser:
     r.add_argument("--sources", help="read the sources a public sources list names (export-sources), not the KB-'s")
     r.add_argument("--history", type=int, default=0, metavar="N",
                    help="also read each repository's last N commits: per document, and its log (needs full clones)")  # fmt: skip
-    x = sub.add_parser("export-sources", help="write a knowledge base's public sources list, each confirmed on GitHub")
+    x = sub.add_parser(
+        "export-sources", help="write a knowledge base's public sources list, each confirmed on its host"
+    )
     x.add_argument("kb", help="the KB- ID")
     x.add_argument("out", help="the list's file (JSON); it names public sources only")
     x.add_argument("--projects-dir", help="the directory holding the sources' checkouts, each under its own name")
     x.add_argument("--project", action="append", help="<name>=<dir>: a checkout elsewhere (repeatable)")
+    rp = sub.add_parser("repository", help="a GitHub or Azure DevOps repository URL: its host, name and visibility")
+    rp.add_argument("url", help="https or ssh; Azure DevOps reads AZURE_DEVOPS_EXT_PAT for a private project")
     pc = sub.add_parser("publish-check", help="refuse to publish a build holding anything not public")
     pc.add_argument("build", help="the public folders build")
     pc.add_argument("--sources", required=True, help="the public sources list it was read from")
@@ -355,6 +374,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "onboard": _onboard,
             "read-sources": _read_sources,
             "export-sources": _export_sources,
+            "repository": _repository,
             "publish-check": _publish_check,
             "site": _site,
             "build-folders": _build_folders,
