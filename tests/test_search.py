@@ -221,3 +221,25 @@ def test_a_title_match_outranks_a_match_in_the_text(tmp_path: Path):
     (out / "manifest.json").write_text(_json.dumps({"target": "vector-database", "embedding": {"dimensions": 1}}))
     passages = asyncio.run(BuildIndex(out).search("invoices", mode=Mode.KEYWORD))
     assert passages[0].title == "Invoices"
+
+
+def test_a_search_gives_each_documents_best_passage_only_unless_asked(tmp_path: Path):
+    out = tmp_path / "b"
+    rows = [
+        ("c1", "docs/a.md", "Invoices", "Approval", "Invoices are approved twice."),
+        ("c2", "docs/a.md", "Invoices", "Payment", "Invoices are paid once approved."),
+        ("c3", "docs/b.md", "Ledger", "", "The ledger lists every invoice."),
+    ]
+    (out / "docs").mkdir(parents=True)
+    for path, title in {(p, t) for _, p, t, _, _ in rows}:
+        (out / path).write_text(f"---\ntitle: {title}\nclassification: Public\n---\n\ninvoices\n")
+    (out / "chunks.jsonl").write_text("".join(json.dumps({"id": i, "path": p, "title": t, "heading": h, "text": x,
+        "classification": "Public", "source": None, "url": None}) + "\n" for i, p, t, h, x in rows))  # fmt: skip
+    vectors = pa.array([[1.0], [1.0], [1.0]], pa.list_(pa.float32(), 1))
+    pq.write_table(pa.table({"id": ["c1", "c2", "c3"], "vector": vectors}), out / "vectors.parquet")
+    (out / "manifest.json").write_text(json.dumps({"target": "vector-database", "embedding": {"dimensions": 1}}))
+    index = BuildIndex(out)
+    once = asyncio.run(index.search("invoices", mode=Mode.KEYWORD))
+    assert [p.path for p in once] == ["docs/a.md", "docs/b.md"]
+    every = asyncio.run(index.search("invoices", mode=Mode.KEYWORD, per_document=0))
+    assert sorted(p.path for p in every) == ["docs/a.md", "docs/a.md", "docs/b.md"]

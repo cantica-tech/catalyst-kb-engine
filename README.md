@@ -26,7 +26,8 @@ catalyst-kb-engine build-vectors <kb repo> builds/1.0.0 --kb KB-… --version 1.
     --local-model ollama:nomic-embed-text [--hosted-model openai:text-embedding-3-small --hosted-up-to Internal] \
     [--embed-input context|text] [--document-prefix "search_document: " --query-prefix "search_query: "] \
     [--previous builds/0.9.0]
-catalyst-kb-engine search "who approves an invoice?" --build builds/1.0.0 [-k 8] [--mode hybrid|keyword|vector]
+catalyst-kb-engine search "who approves an invoice?" --build builds/1.0.0 [-k 8] [--mode hybrid|keyword|vector] \
+    [--per-document 1]
 catalyst-kb-engine mcp --build builds/1.0.0                                             # the same, as an MCP tool
 catalyst-kb-engine serve --build builds/1.0.0 [--port 8765]                            # over HTTP, to the realm only
 catalyst-kb-engine evaluate questions.yaml --build builds/1.0.0 [--record KBUILD-…]     # score it
@@ -74,7 +75,8 @@ An `ollama:` model is reached at `OLLAMA_BASE_URL`, else at Ollama's own address
 `build-vectors`, and by `search`, `mcp` and `serve` for a build embedded with one.
 
 `search` reads a vector build and writes nothing. It merges keywords (SQLite FTS5) and vectors (the question embedded
-with the build's own model, from its manifest) by reciprocal rank. Each passage cites its document, heading,
+with the build's own model, from its manifest) by reciprocal rank, and keeps each document's best passage only
+(`--per-document N` keeps up to N, 0 every one). Each passage cites its document, heading,
 classification and source, and for a criterion document its entity's ID. `mcp` serves the same search over stdio,
 for an agent on the machine that keeps the build. `evaluate` runs an evaluation set (YAML: `questions`, each with an
 `id`, a `question` and `expect`, the entity IDs or document paths a good answer cites) in every mode. It reports
