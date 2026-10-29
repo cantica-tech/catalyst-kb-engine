@@ -1,6 +1,6 @@
 # 01 — catalyst-docs: catalyst's central documentation, public in depth, searchable in depth by the realm
 
-> **Status: decided (owner, 2026-10-25)**, §10's four questions as proposed. The owner's request: a central documentation of catalyst, started in depth and
+> **Status: done (2026-10-29), all six phases of §9 delivered; decided (owner, 2026-10-25)**, §10's four questions as proposed. The owner's request: a central documentation of catalyst, started in depth and
 > public, with an in-depth search of what it covers, built by KBM over the whole fleet of criteria describing
 > catalyst. The owner's four answers are in §2, §10's in §10. Builds on KBM's
 > `docs/engine-and-onboarding.md` and on catalyst's designs `30` (visibility) and `32` (project membership).
