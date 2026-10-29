@@ -21,6 +21,9 @@ RRF_K = 60
 """Reciprocal rank fusion's constant: a passage scores the sum of 1 / (60 + its rank) in each ranking."""
 CANDIDATES = 50
 """How many passages each ranking contributes to the fusion."""
+PER_DOCUMENT = 1
+"""How many passages of one document a search returns: its best only, so k passages are k documents; measured on
+catalyst-docs' realm against 2 and every passage, the best hybrid recall (REQ-000016-7TE7wuaB)."""
 KEYWORD_WEIGHTS = (5.0, 3.0, 1.0)
 """`bm25`'s weight for a match in a chunk's title, its heading and its text: measured on catalyst-docs' realm against
 1/1/1, 3/2/1 and 10/5/1, the best hybrid recall (REQ-000011-7TE7wuaB)."""
@@ -147,8 +150,15 @@ class BuildIndex:
         )
 
     async def search(
-        self, question: str, *, k: int = 8, mode: Mode = Mode.HYBRID, embed: Embed | None = None
+        self,
+        question: str,
+        *,
+        k: int = 8,
+        mode: Mode = Mode.HYBRID,
+        embed: Embed | None = None,
+        per_document: int = PER_DOCUMENT,
     ) -> list[Passage]:
+        """The k best passages, at most `per_document` of any one document (0: no limit)."""
         if mode is Mode.KEYWORD:
             ranked = self.keyword(question)
         else:
@@ -156,7 +166,20 @@ class BuildIndex:
                 embed = query_embedder(self.model)
             vectors = await self.vector(question, embed)
             ranked = vectors if mode is Mode.VECTOR else fuse(self.keyword(question), vectors)
+        if per_document:
+            ranked = self._per_document(ranked, per_document)
         return [self.passage(i, rank, score) for rank, (i, score) in enumerate(ranked[:k], start=1)]
+
+    def _per_document(self, ranked: list[tuple[int, float]], n: int) -> list[tuple[int, float]]:
+        """`ranked`, keeping each document's first `n` passages."""
+        seen: dict[str, int] = {}
+        kept = []
+        for index, score in ranked:
+            path = self.chunks[index]["path"]
+            if seen.get(path, 0) < n:
+                seen[path] = seen.get(path, 0) + 1
+                kept.append((index, score))
+        return kept
 
 
 def fuse(*rankings: list[tuple[int, float]]) -> list[tuple[int, float]]:

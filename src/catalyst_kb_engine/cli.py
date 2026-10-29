@@ -158,7 +158,8 @@ def _read_sources(args: argparse.Namespace) -> int:
 def _search(args: argparse.Namespace) -> int:
     from catalyst_kb_engine.search import BuildIndex, Mode, render
 
-    passages = asyncio.run(BuildIndex(Path(args.build)).search(args.question, k=args.k, mode=Mode(args.mode)))
+    index = BuildIndex(Path(args.build))
+    passages = asyncio.run(index.search(args.question, k=args.k, mode=Mode(args.mode), per_document=args.per_document))
     print(json.dumps([p.record() for p in passages], indent=2) if args.json else render(passages))
     return 0
 
@@ -346,6 +347,9 @@ def _parser() -> argparse.ArgumentParser:
     s.add_argument("question")
     s.add_argument("--build", required=True, help="the vector database build's directory")
     s.add_argument("-k", type=int, default=8, help="how many passages (default 8)")
+    s.add_argument(
+        "--per-document", type=int, default=1, help="at most this many passages of one document (default 1; 0: any)"
+    )
     s.add_argument("--mode", choices=modes, default="hybrid")
     s.add_argument("--json", action="store_true", help="the passages as JSON")
     m = sub.add_parser("mcp", help="serve a vector build's search as an MCP tool, over stdio")
