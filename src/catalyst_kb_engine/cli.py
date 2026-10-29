@@ -128,6 +128,14 @@ def _site(args: argparse.Namespace) -> int:
     return 0
 
 
+def _record_site(args: argparse.Namespace) -> int:
+    from catalyst_kb_engine.published import record_site
+
+    done = record_site(CatalystCLI(Path(args.project_root)), args.site)
+    print(json.dumps({"recorded": done.recorded, "known": done.known, "superseded": done.superseded}, indent=2))
+    return 0
+
+
 def _read_sources(args: argparse.Namespace) -> int:
     from catalyst_kb_engine.sources.stage import stage, summary
 
@@ -305,6 +313,8 @@ def _parser() -> argparse.ArgumentParser:
     st.add_argument("out", help="the pages' directory, new or empty")
     st.add_argument("--title", default="Documentation", help="the home page's title")
     st.add_argument("--intro", default="", help="the home page's opening paragraph")
+    rs = sub.add_parser("record-site", help="record the builds a site publishes, from its manifests, as KBUILD-s")
+    rs.add_argument("site", help="the site's https URL, e.g. https://<owner>.github.io/<repository>/")
     b = sub.add_parser("build-folders", help="write a folders build of a knowledge base repository")
     b.add_argument("repository", help="the knowledge base repository (docs/, pointers/)")
     b.add_argument("out", help="the build's directory, new or empty")
@@ -370,7 +380,7 @@ def _parser() -> argparse.ArgumentParser:
     e.add_argument("--record", metavar="KBUILD", help="write the score into this KBUILD-'s Verification")
     pl = sub.add_parser("plan", help="read a recorded knowledge base back into its onboarding plan")
     pl.add_argument("kb", help="the KB- ID")
-    for p in (o, r, x, b, v, e, pl):
+    for p in (o, r, x, b, v, e, pl, rs):
         p.add_argument("--project-root", default=".", help="the catalyst project (default: here)")
     return parser
 
@@ -390,6 +400,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "repository": _repository,
             "publish-check": _publish_check,
             "site": _site,
+            "record-site": _record_site,
             "build-folders": _build_folders,
             "build-vectors": _build_vectors,
             "search": _search,

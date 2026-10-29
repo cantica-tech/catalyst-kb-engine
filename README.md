@@ -34,6 +34,7 @@ catalyst-kb-engine evaluate questions.yaml --build builds/1.0.0 [--record KBUILD
 catalyst-kb-engine export-sources KB-… site/sources.json --projects-dir ~/sources         # its public sources only
 catalyst-kb-engine publish-check builds/public --sources site/sources.json               # nothing private in it
 catalyst-kb-engine site builds/public _pages --title "…" --intro "…"                      # the site's pages
+catalyst-kb-engine record-site https://<owner>.github.io/<repository>/                  # its builds, recorded
 ```
 
 Records go through catalyst's CLI (`CATALYST_CLI`, else `catalyst`), in the project (`--project-root`). A vector
@@ -92,6 +93,10 @@ their documents are at least `Internal`, and `publish-check` refuses such a list
 refuses a build holding any document whose source the list does not name, or that is not `Public`. `site` makes the
 pages: the knowledge base's own pages (`docs/guide/`) as written, and one reference page per document citing its file.
 catalyst-docs builds its site this way in GitHub Actions and deploys it to Pages, with no branch keeping it.
+`record-site`, run from the knowledge base's project after a deployment, records each build the site serves (its
+`manifest.json`, and `vectors/manifest.json` when there is one) as a `KBUILD-`, `Published`, superseding the one it
+replaces: the publishing service cannot reach a private criterion. A manifest already recorded is skipped, by its
+SHA-256.
 
 `serve` answers `GET /search?q=&k=&mode=` (and `GET /me`) only to a bearer token the realm's provider vouches for,
 through catalyst-users' FastAPI integration: active introspection, the realm's issuer, the `catalyst-api` audience. Any
