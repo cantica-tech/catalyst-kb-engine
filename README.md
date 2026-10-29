@@ -70,6 +70,9 @@ the rest. Its manifest's `incremental` counts both. By default a chunk is embedd
 heading before its text (`--embed-input context`). The manifest records that, and any prefixes; `search` applies the
 build's query prefix to each question.
 
+An `ollama:` model is reached at `OLLAMA_BASE_URL`, else at Ollama's own address, `http://localhost:11434/v1`: by
+`build-vectors`, and by `search`, `mcp` and `serve` for a build embedded with one.
+
 `search` reads a vector build and writes nothing. It merges keywords (SQLite FTS5) and vectors (the question embedded
 with the build's own model, from its manifest) by reciprocal rank. Each passage cites its document, heading,
 classification and source, and for a criterion document its entity's ID. `mcp` serves the same search over stdio,

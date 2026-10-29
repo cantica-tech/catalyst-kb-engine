@@ -170,9 +170,9 @@ def fuse(*rankings: list[tuple[int, float]]) -> list[tuple[int, float]]:
 
 def query_embedder(model: str) -> Embed:
     """The build's own embedding model (its manifest's `embedding.model`), as a Pydantic AI `Embedder` for queries."""
-    from pydantic_ai import Embedder
+    from catalyst_kb_engine.build.vectors import embedder as make_embedder
 
-    embedder = Embedder(model)
+    embedder = make_embedder(model)
 
     async def embed(question: str) -> list[float]:
         result = await embedder.embed_query(question)
