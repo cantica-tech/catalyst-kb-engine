@@ -350,7 +350,12 @@ def _parser() -> argparse.ArgumentParser:
     s.add_argument("--json", action="store_true", help="the passages as JSON")
     m = sub.add_parser("mcp", help="serve a vector build's search as an MCP tool, over stdio")
     m.add_argument("--build", required=True, help="the vector database build's directory")
-    sv = sub.add_parser("serve", help="serve a vector build's search over HTTP, to the realm only (catalyst-users)")
+    sv = sub.add_parser(
+        "serve",
+        help="serve a vector build's search over HTTP, to the realm only (catalyst-users)",
+        epilog="Settings: catalyst-users' environment (CATALYST_USERS_SERVER, CATALYST_USERS_API_CLIENT_SECRET, ...); "
+        "for a build embedded with an ollama: model, OLLAMA_BASE_URL (default http://localhost:11434/v1).",
+    )
     sv.add_argument("--build", required=True, help="the vector database build's directory")
     sv.add_argument("--host", default="127.0.0.1", help="the address to listen on (default: this machine only)")
     sv.add_argument("--port", type=int, default=8765)

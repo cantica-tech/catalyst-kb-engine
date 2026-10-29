@@ -17,6 +17,7 @@ import hashlib
 import io
 import json
 import math
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -34,6 +35,8 @@ from catalyst_kb_engine.build.folders import (
 from catalyst_kb_engine.models import Classification
 
 BATCH = 64
+OLLAMA_URL = "http://localhost:11434/v1"
+"""Where an `ollama:` model is reached when `OLLAMA_BASE_URL` names nowhere else: Ollama's own default address."""
 EmbedInput = Literal["text", "context"]
 """What a chunk's embedding input is: its text alone, or `context`, its document's title and heading before it."""
 
@@ -43,6 +46,18 @@ def embed_input(c: Chunk, mode: EmbedInput) -> str:
     if mode == "text":
         return c.text
     return "\n".join(x for x in (c.title, c.heading) if x) + "\n\n" + c.text
+
+
+def embedder(model: Any) -> Any:
+    """A Pydantic AI `Embedder` for `model` (one, or its name), an `ollama:` name on `OLLAMA_URL` unless
+    `OLLAMA_BASE_URL` is set: Pydantic AI's Ollama provider has no address of its own."""
+    from pydantic_ai import Embedder
+
+    if isinstance(model, Embedder):
+        return model
+    if str(model).startswith("ollama:") and not os.environ.get("OLLAMA_BASE_URL"):
+        os.environ["OLLAMA_BASE_URL"] = OLLAMA_URL
+    return Embedder(model)
 
 
 @dataclass(frozen=True)
@@ -92,14 +107,13 @@ def _unit(vector: list[float]) -> list[float]:
 
 
 async def _embed(model: EmbeddingModel, texts: list[str]) -> list[list[float]]:
-    from pydantic_ai import Embedder
     from pydantic_ai.exceptions import AgentRunError, ModelAPIError, UserError
 
     vectors: list[list[float]] = []
     try:
-        embedder = model.model if isinstance(model.model, Embedder) else Embedder(model.model)
+        embed = embedder(model.model)
         for start in range(0, len(texts), BATCH):
-            result = await embedder.embed_documents(texts[start : start + BATCH])
+            result = await embed.embed_documents(texts[start : start + BATCH])
             vectors += [_unit([float(x) for x in v]) for v in result.embeddings]
     except (AgentRunError, ModelAPIError, UserError, ImportError, ValueError) as err:  # ValueError: unknown provider
         raise BuildError(f"embedding with {model.name} failed, so nothing is built: {err}") from err

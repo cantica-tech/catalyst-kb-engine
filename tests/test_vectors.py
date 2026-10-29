@@ -7,6 +7,7 @@ import asyncio
 import hashlib
 import json
 import math
+import os
 
 import pyarrow.parquet as pq
 import pytest
@@ -14,9 +15,10 @@ from pydantic_ai.embeddings import TestEmbeddingModel
 
 from catalyst_kb_engine.build.chunks import chunk
 from catalyst_kb_engine.build.folders import BuildError
-from catalyst_kb_engine.build.vectors import EmbeddingModel, EmbeddingPolicy, build_vectors
+from catalyst_kb_engine.build.vectors import OLLAMA_URL, EmbeddingModel, EmbeddingPolicy, build_vectors, embedder
 from catalyst_kb_engine.models import Classification
 from catalyst_kb_engine.record import record_build
+from catalyst_kb_engine.search import query_embedder
 from tests.test_folders import INFO, repo  # noqa: F401 - the fixture
 from tests.test_record import FakeCatalyst
 
@@ -81,3 +83,18 @@ def test_a_failing_embedding_model_is_a_refusal_and_nothing_is_written(repo, tmp
     with pytest.raises(BuildError, match="embedding with broken failed"):
         asyncio.run(build_vectors(repo, tmp_path / "out", INFO, EmbeddingPolicy("Local only", local=broken)))
     assert not (tmp_path / "out").exists()
+
+
+def test_an_ollama_model_is_reached_on_ollamas_own_address_unless_another_is_set(monkeypatch):
+    monkeypatch.delenv("OLLAMA_BASE_URL", raising=False)
+    embedder("ollama:nomic-embed-text")
+    assert os.environ["OLLAMA_BASE_URL"] == OLLAMA_URL
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://elsewhere:11434/v1")
+    embedder("ollama:nomic-embed-text")
+    assert os.environ["OLLAMA_BASE_URL"] == "http://elsewhere:11434/v1"
+
+
+def test_a_query_embedder_for_an_ollama_build_needs_no_address(monkeypatch):
+    monkeypatch.delenv("OLLAMA_BASE_URL", raising=False)
+    query_embedder("ollama:nomic-embed-text")
+    assert os.environ["OLLAMA_BASE_URL"] == OLLAMA_URL

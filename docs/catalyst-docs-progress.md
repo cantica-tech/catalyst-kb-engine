@@ -15,7 +15,7 @@ shipped KBM 0.6.0 and 0.6.1, and phases 0 to 5.
 | 3     | **done**: catalyst-kb-engine 0.6.0, `--previous` reads and builds | `REQ-000006-7TE7wuaB`, `REQ-000007-7TE7wuaB`; `KBUILD-000003-erFhHt6m` |
 | 4     | **done**: the guide's twelve pages, each approved by the owner  | catalyst-docs' `GUIDE-OUTLINE.md`, `docs/guide/`            |
 | 5     | **done**: the public site, live, built by Actions (engine 0.8.0) | `REQ-000009-7TE7wuaB`; catalyst-docs' `pages.yml`           |
-| 6     | **built** (engine 0.9.0); the live check waits for the owner     | `REQ-000010-7TE7wuaB` (Active), `STEP-000015-7TE7wuaB`        |
+| 6     | **done**: engine 0.9.0, checked live, accepted by the owner      | `REQ-000010-7TE7wuaB` (Completed), `STEP-000015-7TE7wuaB`     |
 
 ## What exists
 
@@ -51,8 +51,6 @@ shipped KBM 0.6.0 and 0.6.1, and phases 0 to 5.
   `list all` is cheap; compare each entity's last journal timestamp with the previous manifest's.
 - **The full read's size**: 906 documents, 636 of them from criteria, and a folders build of them holds all 906.
   Counts only, since the output is private.
-- **Roadmap rows** (`RM-`): `list all` lists them, but `view` refuses them. That's 59 rows across catalyst's and the
-  UI's criteria. They are left out and counted, and this is reported to the main session as a kernel item.
 - **Repositories are read from their local checkout's tracked files.** A public build should read the commit on
   GitHub's default branch instead, so unpushed work never reaches the site (phase 5).
 - **The realm build's home**: private local storage, outside any repository, for example
@@ -68,25 +66,21 @@ shipped KBM 0.6.0 and 0.6.1, and phases 0 to 5.
 
 ## The exact next step
 
-Phase 6's live check, the last step of design 01, with the owner. catalyst-kb-engine 0.9.0's `serve` is built and
-tested offline (`tests/test_serve.py`, with catalyst-users' own token checks). The live check needs the local realm's
-`catalyst-api` secret, which only the owner supplies:
+Design 01 is done: phase 6's live check passed on 2026-10-29 (`REQ-000010-7TE7wuaB` Completed). To run the service
+again, give `CATALYST_USERS_SERVER` to `serve` only. Set for `catalyst-users token --system` too, it overrides
+`IAM/settings.json` and drops the system account's password command:
 
 ```sh
-export CATALYST_USERS_SERVER=http://localhost:8080 CATALYST_USERS_API_CLIENT_SECRET=…   # the owner's
-catalyst-kb-engine serve --build ~/.catalyst/projects/catalyst-docs/realm/builds/0.2.1 &
-curl -s -H "Authorization: Bearer $(catalyst-users token --system)" localhost:8765/me      # the realm: 200
-curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer <a token from another realm>" localhost:8765/me  # 401
+CATALYST_USERS_SERVER=http://localhost:8080 CATALYST_USERS_API_CLIENT_SECRET=… \
+  catalyst-kb-engine serve --build ~/.catalyst/projects/catalyst-docs/realm/builds/0.2.1 &   # the owner's secret
+curl -s -H "Authorization: Bearer $(catalyst-users token --system)" localhost:8765/me          # the realm: 200
 ```
 
-Use the same host (`localhost` or `127.0.0.1`) for the token and the service: Keycloak builds its issuer from it. Then
-`REQ-000010-7TE7wuaB` completes, and design 01 is done.
+Use the same host (`localhost` or `127.0.0.1`) for the token and the service: Keycloak builds its issuer from it. An
+`ollama:` build is searched at `OLLAMA_BASE_URL`, else Ollama's own address (0.14.1; before it, `/search` answered 500).
 
 ## Open for the owner
 
-- **The reference includes test fixtures** (for example the UI repository's sample criterion under
-  `src/test/fixtures/`): a repository source takes all its committed markdown. A source's import could name what it
-  draws on, or the repositories could opt fixtures out with `.catalystignore`.
 - **The public build is not recorded as a `KBUILD-`**: Actions cannot reach the private criterion. Its manifest is
   published with the site (`manifest.json`).
 - catalyst-docs' `development` has another session's commit (a project map; `KB.md` updated), not yet merged to
