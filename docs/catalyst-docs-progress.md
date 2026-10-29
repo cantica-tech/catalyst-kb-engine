@@ -51,8 +51,6 @@ shipped KBM 0.6.0 and 0.6.1, and phases 0 to 5.
   `list all` is cheap; compare each entity's last journal timestamp with the previous manifest's.
 - **The full read's size**: 906 documents, 636 of them from criteria, and a folders build of them holds all 906.
   Counts only, since the output is private.
-- **Roadmap rows** (`RM-`): `list all` lists them, but `view` refuses them. That's 59 rows across catalyst's and the
-  UI's criteria. They are left out and counted, and this is reported to the main session as a kernel item.
 - **Repositories are read from their local checkout's tracked files.** A public build should read the commit on
   GitHub's default branch instead, so unpushed work never reaches the site (phase 5).
 - **The realm build's home**: private local storage, outside any repository, for example
