@@ -61,7 +61,9 @@ shipped KBM 0.6.0 and 0.6.1, and phases 0 to 5.
   --query-prefix "search_query: "` (seconds when little changed). A full vector build takes about 46 minutes.
 - **What still misses**: 7 of 52 questions in hybrid mode (0.865 at k 10, MRR 0.569), since 0.15.0 keeps each
   document's best passage (0.10.0 weights keyword matches in a chunk's title 5 and heading 3 against 1 in its text).
-  The misses are mostly vocabulary: a question's words are not its rule's. Measure any further change the same way.
+  The misses are mostly vocabulary: a question's words are not its rule's. Query expansion with a local model
+  (`llama3.2:3b` writing a hypothetical answer, searched beside the question) gained nothing reliable, at about 10 s a
+  question (`REQ-000018-7TE7wuaB`, abandoned). Measure any further change the same way.
 - **Extras**: `search` (numpy, pyarrow) and `mcp` (mcp 2.x, where `FastMCP` is now `MCPServer`).
 - **Local models**: Ollama runs `nomic-embed-text`, `llama3.2:3b` and `codestral`.
 
