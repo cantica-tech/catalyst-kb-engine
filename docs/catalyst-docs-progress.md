@@ -79,7 +79,8 @@ CATALYST_USERS_SERVER=http://localhost:8080 CATALYST_USERS_API_CLIENT_SECRET=…
 curl -s -H "Authorization: Bearer $(catalyst-users token --system)" localhost:8765/me          # the realm: 200
 ```
 
-Use the same host (`localhost` or `127.0.0.1`) for the token and the service: Keycloak builds its issuer from it. An
+Keycloak builds a token's issuer from the host it was asked at; since 0.16.1 `serve` takes `localhost` and
+`127.0.0.1` as one host (`BUG-000047-7TE7wuaB`), so the token and the service may name either. An
 `ollama:` build is searched at `OLLAMA_BASE_URL`, else Ollama's own address (0.14.1; before it, `/search` answered 500).
 
 ## Open for the owner

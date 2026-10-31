@@ -16,18 +16,20 @@ from catalyst_kb_engine.search import BuildIndex, Embed, Mode
 
 def app(build: Path, *, auth: Any = None, embed: Embed | None = None) -> Any:
     """The service for the vector build `build`. `auth` is catalyst-users' `KeycloakAuth` (made from the environment
-    when not given); `embed` replaces the build's embedding model (tests)."""
+    when not given, `localhost` and `127.0.0.1` one host: `serve_auth`); `embed` replaces the build's embedding model
+    (tests)."""
     try:
-        from catalyst_users.fastapi_auth import KeycloakAuth
         from catalyst_users.identity import Identity
         from fastapi import Depends, FastAPI, Query
+
+        from catalyst_kb_engine.serve_auth import realm_auth
     except ImportError as err:  # pragma: no cover - the `serve` extra
         raise ImportError(
             "the realm's search needs catalyst-users and FastAPI: install catalyst-kb-engine[serve]"
         ) from err
 
     index = BuildIndex(build)
-    realm = auth or KeycloakAuth()
+    realm = auth or realm_auth()
     kb, version = index.manifest.get("knowledge_base"), index.manifest.get("version")
     service = FastAPI(title=f"{kb} {version}: the realm's search", docs_url=None, redoc_url=None, openapi_url=None)
 
