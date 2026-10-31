@@ -61,7 +61,9 @@ shipped KBM 0.6.0 and 0.6.1, and phases 0 to 5.
   --query-prefix "search_query: "` (seconds when little changed). A full vector build takes about 46 minutes.
 - **What still misses**: 7 of 52 questions in hybrid mode (0.865 at k 10, MRR 0.569), since 0.15.0 keeps each
   document's best passage (0.10.0 weights keyword matches in a chunk's title 5 and heading 3 against 1 in its text).
-  The misses are mostly vocabulary: a question's words are not its rule's. Measure any further change the same way.
+  The misses are mostly vocabulary: a question's words are not its rule's. Query expansion with a local model
+  (`llama3.2:3b` writing a hypothetical answer, searched beside the question) gained nothing reliable, at about 10 s a
+  question (`REQ-000018-7TE7wuaB`, abandoned). Measure any further change the same way.
 - **Extras**: `search` (numpy, pyarrow) and `mcp` (mcp 2.x, where `FastMCP` is now `MCPServer`).
 - **Local models**: Ollama runs `nomic-embed-text`, `llama3.2:3b` and `codestral`.
 
@@ -77,7 +79,8 @@ CATALYST_USERS_SERVER=http://localhost:8080 CATALYST_USERS_API_CLIENT_SECRET=…
 curl -s -H "Authorization: Bearer $(catalyst-users token --system)" localhost:8765/me          # the realm: 200
 ```
 
-Use the same host (`localhost` or `127.0.0.1`) for the token and the service: Keycloak builds its issuer from it. An
+Keycloak builds a token's issuer from the host it was asked at; since 0.16.1 `serve` takes `localhost` and
+`127.0.0.1` as one host (`BUG-000047-7TE7wuaB`), so the token and the service may name either. An
 `ollama:` build is searched at `OLLAMA_BASE_URL`, else Ollama's own address (0.14.1; before it, `/search` answered 500).
 
 ## Open for the owner

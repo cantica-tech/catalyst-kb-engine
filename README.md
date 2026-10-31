@@ -103,7 +103,8 @@ through catalyst-users' FastAPI integration: active introspection, the realm's i
 other token is refused (401), and a provider out of reach refuses too (503). Its settings are catalyst-users'
 environment (`CATALYST_USERS_SERVER`, `CATALYST_USERS_REALM`, `CATALYST_USERS_API_CLIENT_SECRET`, …); it never logs or
 returns a token or a secret, serves no API description, and listens on this machine only unless `--host` says
-otherwise.
+otherwise. With the provider on loopback, `localhost` and `127.0.0.1` are one host: a token got at either name of the
+same port and realm is checked where it was got (0.16.1).
 
 ## Development
 

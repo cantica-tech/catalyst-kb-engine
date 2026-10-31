@@ -1,6 +1,6 @@
 [project]
 name = "catalyst-kb-engine"
-version = "0.16.0"
+version = "0.16.1"
 description = "The knowledge base module's engine: onboarding and builds as workflows (Pydantic AI, pydantic-graph), producing organized markdown folders or vector databases any model can read"
 readme = "README.md"
 license = "Apache-2.0"
@@ -35,7 +35,7 @@ mcp = [
     "pyarrow>=17",
 ]
 serve = [
-    "catalyst-users[fastapi] @ git+https://github.com/cantica-tech/catalyst-users@0.7.0",
+    "catalyst-users[fastapi] @ git+https://github.com/cantica-tech/catalyst-users@0.10.0",
     "numpy>=1.26",
     "pyarrow>=17",
     "uvicorn>=0.30",
@@ -43,13 +43,13 @@ serve = [
 
 [dependency-groups]
 dev = [
-    "catalyst-users[fastapi] @ git+https://github.com/cantica-tech/catalyst-users@0.7.0",
-    "httpx>=0.27",
+    "catalyst-users[fastapi] @ git+https://github.com/cantica-tech/catalyst-users@0.10.0",
+    "httpx2>=2.16.0",
     "mcp>=2.3",
     "numpy>=1.26",
     "pyarrow>=17",
     "pytest>=8",
-    "ruff>=0.7",
+    "ruff==0.16.10",
 ]
 
 [build-system]
