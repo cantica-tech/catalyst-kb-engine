@@ -31,7 +31,8 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: python -m pip install --quiet "uv==${UV_VERSION}"
       - run: uv sync --locked
-      - run: uv run ruff check
-      - run: uv run ruff format --check
+      # ruff==0.16.10, pinned in the dev group: the version cantica-tech/standards' lint runs
+      - run: uv run ruff check --no-cache .
+      - run: uv run ruff format --check --no-cache .
       - run: uvx pyright --pythonpath .venv/bin/python
       - run: uv run pytest -q
