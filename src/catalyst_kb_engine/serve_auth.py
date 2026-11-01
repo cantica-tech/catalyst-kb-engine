@@ -2,7 +2,8 @@
 host. Keycloak builds a token's issuer from the host it was asked at, and verifies a token at introspection against
 the host it is asked at: a token got at `localhost` was refused by a service checking at `127.0.0.1`, and the other
 way (BUG-000047). When the service's provider is on loopback, a token whose issuer names the other loopback name of
-the same port and realm is introspected there and checked against that issuer; any other token is checked as before.
+the same port and realm is introspected there; any other token is introspected as before. The introspected claims
+are checked by catalyst-users, whose issuer match (`config.same_issuer`, 0.11.0) takes the loopback names as one.
 The provider still decides: the token's own claim only picks which of the two names to ask. Needs the `serve` extra.
 """
 
@@ -57,10 +58,6 @@ class LoopbackOIDCClient(OIDCClient):
     def introspect(self, token: str) -> dict:
         twin = self._twin_for(claimed_issuer(token))
         return twin.introspect(token) if twin else super().introspect(token)
-
-    def accepts(self, claims: dict[str, Any]) -> bool:
-        twin = self._twin_for(claims.get("iss"))
-        return twin.accepts(claims) if twin else super().accepts(claims)
 
 
 def realm_auth(settings: Settings | None = None) -> KeycloakAuth:
