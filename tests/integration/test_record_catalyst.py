@@ -1,16 +1,21 @@
 """Onboarding and a folders build recorded in a real catalyst deployment with KBM, read back, and checked.
 
-Runs only when KB_ENGINE_IT=1. It needs a catalyst checkout (CATALYST_CHECKOUT, else ../catalyst), the knowledge base
-module (KBM_MODULE, else ../catalyst-knowledge-base), and this machine's catalyst-users set up, whose system account
-signs (KB_ENGINE_IT_USER: its name, else `git config user.name`). Everything else is in a temporary directory.
+Runs only when KB_ENGINE_IT=1. It needs catalyst: a kernel release directory (CATALYST_RELEASE, holding catalyst.pyz
+and kernel-v<x.y.z>.zip, e.g. the distribution repository's catalyst/kernel/v0.121.0), else a catalyst checkout
+(CATALYST_CHECKOUT, else ../catalyst); and the knowledge base module (KBM_MODULE, else ../catalyst-knowledge-base).
+The deployment signs through catalyst-users' static backend, which verifies nobody and is accepted only with
+CATALYST_ALLOW_STATIC_IDENTITY=1 (the test sets it), as catalyst's own tests do: its one person is KB_ENGINE_IT_USER,
+else `git config user.name`. Everything else is in a temporary directory.
 """
 
 from __future__ import annotations
 
 import asyncio
 import os
+import shlex
 import subprocess
 import sys
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -24,6 +29,7 @@ from catalyst_kb_engine.record import KbPolicy, read_plan, record_build, record_
 
 ROOT = Path(__file__).resolve().parents[2]
 CHECKOUT = Path(os.environ.get("CATALYST_CHECKOUT") or ROOT.parent / "catalyst")
+RELEASE = Path(os.environ["CATALYST_RELEASE"]) if os.environ.get("CATALYST_RELEASE") else None
 KBM = Path(os.environ.get("KBM_MODULE") or ROOT.parent / "catalyst-knowledge-base")
 
 pytestmark = pytest.mark.skipif(os.environ.get("KB_ENGINE_IT") != "1", reason="integration: set KB_ENGINE_IT=1")
@@ -34,6 +40,19 @@ class Accept:
         return proposal
 
 
+def _catalyst(tmp_path: Path, monkeypatch) -> Path:
+    """The kernel to install from, with `CATALYST_CLI` set to run the same catalyst: a release, else a checkout."""
+    if RELEASE is not None:
+        kernel = tmp_path / "kernel"
+        with zipfile.ZipFile(next(RELEASE.glob("kernel-v*.zip"))) as z:
+            z.extractall(kernel)
+        monkeypatch.setenv("CATALYST_CLI", shlex.join([sys.executable, str(RELEASE / "catalyst.pyz")]))
+        return kernel
+    monkeypatch.setenv("PYTHONPATH", str(CHECKOUT / "scripts"))
+    monkeypatch.setenv("CATALYST_CLI", f"{sys.executable} -m catalyst")
+    return CHECKOUT / "framework/kernel"
+
+
 def _user() -> str:
     found = subprocess.run(["git", "config", "user.name"], capture_output=True, text=True, check=False).stdout
     return os.environ.get("KB_ENGINE_IT_USER") or found.strip()
@@ -42,13 +61,14 @@ def _user() -> str:
 @pytest.fixture
 def project(tmp_path, monkeypatch) -> Path:
     monkeypatch.setenv("CATALYST_HOME", str(tmp_path / "home"))
-    monkeypatch.setenv("PYTHONPATH", str(CHECKOUT / "scripts"))
-    monkeypatch.setenv("CATALYST_CLI", f"{sys.executable} -m catalyst")
+    # catalyst-users' static backend: the scratch deployment's one person, verified by nobody (tests only)
+    monkeypatch.setenv("CATALYST_ALLOW_STATIC_IDENTITY", "1")
+    kernel = _catalyst(tmp_path, monkeypatch)
     app = tmp_path / "app"
     subprocess.run(["git", "init", "-q", str(app)], check=True)
     cli = CatalystCLI(app)
     cli.run(
-        "init", "--kernel", str(CHECKOUT / "framework/kernel"), "--name", "app", "--module", "knowledge-base",
+        "init", "--kernel", str(kernel), "--name", "app", "--module", "knowledge-base",
         "--module-dir", str(KBM), "--user", _user(), "--rule-doc", "kb-rules.md:kr", "--no-runtime",
     )  # fmt: skip
     rules = cli.criterion() / "rules"
