@@ -51,7 +51,7 @@ wheels = [
 
 [[package]]
 name = "catalyst-kb-engine"
-version = "0.16.2"
+version = "0.16.3"
 source = { editable = "." }
 dependencies = [
     { name = "pydantic" },
@@ -100,7 +100,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "catalyst-users", extras = ["fastapi"], marker = "extra == 'serve'", git = "https://github.com/cantica-tech/catalyst-users?rev=0.11.0" },
+    { name = "catalyst-users", extras = ["fastapi"], marker = "extra == 'serve'", git = "https://github.com/cantica-tech/catalyst-users?rev=0.11.1" },
     { name = "mcp", marker = "extra == 'mcp'", specifier = ">=2.3" },
     { name = "numpy", marker = "extra == 'mcp'", specifier = ">=1.26" },
     { name = "numpy", marker = "extra == 'search'", specifier = ">=1.26" },
@@ -120,7 +120,7 @@ provides-extras = ["vectors", "openai", "search", "mcp", "serve"]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "catalyst-users", extras = ["fastapi"], git = "https://github.com/cantica-tech/catalyst-users?rev=0.11.0" },
+    { name = "catalyst-users", extras = ["fastapi"], git = "https://github.com/cantica-tech/catalyst-users?rev=0.11.1" },
     { name = "httpx2", specifier = ">=2.16.0" },
     { name = "mcp", specifier = ">=2.3" },
     { name = "numpy", specifier = ">=1.26" },
@@ -131,8 +131,8 @@ dev = [
 
 [[package]]
 name = "catalyst-users"
-version = "0.11.0"
-source = { git = "https://github.com/cantica-tech/catalyst-users?rev=0.11.0#3cd6442f0a621f1febc7576ed0c4556868d8e945" }
+version = "0.11.1"
+source = { git = "https://github.com/cantica-tech/catalyst-users?rev=0.11.1#acf1edfa0658e708ec6cb5310b77cc7a9e1c0f44" }
 
 [package.optional-dependencies]
 fastapi = [
